@@ -1,0 +1,424 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: rcloneremotes.rco.frozenbits.se
+spec:
+  group: rco.frozenbits.se
+  names:
+    kind: RCloneRemote
+    listKind: RCloneRemoteList
+    plural: rcloneremotes
+    singular: rcloneremote
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RCloneRemote is the Schema for the rcloneremotes API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of RCloneRemote
+            properties:
+              crypt:
+                description: crypt configures an rclone crypt backend wrapping another
+                  remote.
+                properties:
+                  directoryNameEncryption:
+                    default: true
+                    description: |-
+                      directoryNameEncryption enables encryption of directory names
+                      (rclone option: directory_name_encryption).
+                    type: boolean
+                  filenameEncoding:
+                    default: base32
+                    description: |-
+                      filenameEncoding selects the encoding of encrypted file names
+                      (rclone option: filename_encoding).
+                    enum:
+                    - base32
+                    - base64
+                    - base32768
+                    type: string
+                  filenameEncryption:
+                    default: standard
+                    description: |-
+                      filenameEncryption selects how file names are encrypted
+                      (rclone option: filename_encryption).
+                    enum:
+                    - standard
+                    - obfuscate
+                    - "off"
+                    type: string
+                  passwordRef:
+                    description: |-
+                      passwordRef selects the Secret key holding the encryption password
+                      (rclone option: password).
+                    properties:
+                      key:
+                        description: key within the Secret's data.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  path:
+                    description: |-
+                      path within the wrapped remote that holds the encrypted data
+                      (rclone option: remote, the part after the colon).
+                    type: string
+                  remoteRef:
+                    description: 'remoteRef references the remote to wrap (rclone
+                      option: remote).'
+                    properties:
+                      kind:
+                        default: RCloneRemote
+                        description: kind of the referenced object. Defaults to RCloneRemote.
+                        enum:
+                        - RCloneRemote
+                        - RCloneClusterRemote
+                        type: string
+                      name:
+                        description: name of the referenced object.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  saltRef:
+                    description: |-
+                      saltRef selects the Secret key holding the optional salt
+                      (rclone option: password2).
+                    properties:
+                      key:
+                        description: key within the Secret's data.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                required:
+                - passwordRef
+                - remoteRef
+                type: object
+              s3:
+                description: s3 configures an rclone s3 backend.
+                properties:
+                  accessKeyIDRef:
+                    description: |-
+                      accessKeyIDRef selects the Secret key holding the access key ID
+                      (rclone option: access_key_id).
+                    properties:
+                      key:
+                        description: key within the Secret's data.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  acl:
+                    description: 'acl is the canned ACL applied to created objects
+                      and buckets (rclone option: acl).'
+                    type: string
+                  endpoint:
+                    description: 'endpoint of the S3 API, for non-AWS providers (rclone
+                      option: endpoint).'
+                    type: string
+                  forcePathStyle:
+                    description: |-
+                      forcePathStyle uses path-style bucket addressing; required by most
+                      non-AWS providers (rclone option: force_path_style).
+                    type: boolean
+                  noCheckBucket:
+                    description: |-
+                      noCheckBucket skips checking for and creating the bucket, for credentials
+                      without bucket-level permissions (rclone option: no_check_bucket).
+                    type: boolean
+                  provider:
+                    description: |-
+                      provider is the rclone s3 provider name, e.g. AWS, Minio, Ceph, Wasabi, Other
+                      (rclone option: provider).
+                    minLength: 1
+                    type: string
+                  region:
+                    description: 'region to connect to (rclone option: region).'
+                    type: string
+                  secretAccessKeyRef:
+                    description: |-
+                      secretAccessKeyRef selects the Secret key holding the secret access key
+                      (rclone option: secret_access_key).
+                    properties:
+                      key:
+                        description: key within the Secret's data.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  storageClass:
+                    description: 'storageClass to use when storing new objects (rclone
+                      option: storage_class).'
+                    type: string
+                required:
+                - accessKeyIDRef
+                - provider
+                - secretAccessKeyRef
+                type: object
+              sftp:
+                description: sftp configures an rclone sftp backend.
+                properties:
+                  connections:
+                    description: |-
+                      connections is the maximum number of concurrent SSH connections rclone may
+                      open to this host (rclone option: connections). Unset means rclone's default
+                      of unlimited.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  host:
+                    description: 'host to connect to (rclone option: host).'
+                    minLength: 1
+                    type: string
+                  passwordRef:
+                    description: 'passwordRef selects the Secret key holding the SSH
+                      password (rclone option: pass).'
+                    properties:
+                      key:
+                        description: key within the Secret's data.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  port:
+                    default: 22
+                    description: 'port to connect to (rclone option: port).'
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                  privateKeyPassphraseRef:
+                    description: |-
+                      privateKeyPassphraseRef selects the Secret key holding the passphrase for
+                      privateKeyRef, if the key is encrypted (rclone option: key_file_pass).
+                    properties:
+                      key:
+                        description: key within the Secret's data.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  privateKeyRef:
+                    description: |-
+                      privateKeyRef selects the Secret key holding a PEM-encoded private key
+                      (rclone option: key_pem).
+                    properties:
+                      key:
+                        description: key within the Secret's data.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  user:
+                    description: 'user to log in as (rclone option: user).'
+                    minLength: 1
+                    type: string
+                required:
+                - host
+                - user
+                type: object
+                x-kubernetes-validations:
+                - message: one of passwordRef or privateKeyRef must be set
+                  rule: has(self.passwordRef) || has(self.privateKeyRef)
+              template:
+                description: |-
+                  template configures a remote from a free-form rclone connection string
+                  template with secret inputs.
+                properties:
+                  inputs:
+                    additionalProperties:
+                      description: |-
+                        SecretKeyRef selects a single key of a Secret. For a namespaced RCloneRemote the
+                        Secret is looked up in the remote's namespace; for an RCloneClusterRemote it is
+                        looked up in the operator's namespace.
+                      properties:
+                        key:
+                          description: key within the Secret's data.
+                          minLength: 1
+                          type: string
+                        name:
+                          description: name of the Secret.
+                          minLength: 1
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    description: inputs maps placeholder names to the Secret keys
+                      that fill them.
+                    type: object
+                  template:
+                    description: template is the rclone connection string with placeholders
+                      for inputs.
+                    minLength: 1
+                    type: string
+                required:
+                - template
+                type: object
+              type:
+                description: type selects the rclone backend. Exactly the matching
+                  backend field must be set.
+                enum:
+                - sftp
+                - s3
+                - crypt
+                - template
+                type: string
+            required:
+            - type
+            type: object
+            x-kubernetes-validations:
+            - message: sftp must be set if and only if type is sftp
+              rule: 'self.type == ''sftp'' ? has(self.sftp) : !has(self.sftp)'
+            - message: crypt must be set if and only if type is crypt
+              rule: 'self.type == ''crypt'' ? has(self.crypt) : !has(self.crypt)'
+            - message: s3 must be set if and only if type is s3
+              rule: 'self.type == ''s3'' ? has(self.s3) : !has(self.s3)'
+            - message: template must be set if and only if type is template
+              rule: 'self.type == ''template'' ? has(self.template) : !has(self.template)'
+          status:
+            description: status defines the observed state of RCloneRemote
+            properties:
+              conditions:
+                description: |-
+                  conditions represent the current state of the RCloneRemote resource.
+                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
+
+                  Standard condition types include:
+                  - "Available": the resource is fully functional
+                  - "Progressing": the resource is being created or updated
+                  - "Degraded": the resource failed to reach or maintain its desired state
+
+                  The status of each condition is one of True, False, or Unknown.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

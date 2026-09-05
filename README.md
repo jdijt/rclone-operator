@@ -5,10 +5,9 @@ rclone-operator is a project I took on for the following reasons:
 - I want to write non-trivial Kubernetes controller in Go to improve & to demonstrate my skill with the language
 - I have a bunch of [rclone](https://rclone.org) syncs in my homelab (backups, mirrors, offloading to cloud storage)
   that are currently ad-hoc CronJobs and scripts. I want them to be:
-  - declared as Kubernetes resources, so they are versioned and reviewed like everything else in the cluster.
+  - declared as Kubernetes resources with a schema, to make them easier to manage.
   - observable: how fast did the last run go, how much data & how many files were transferred, when did it last succeed.
-  - well-behaved as a group: not all hammering the same upstream at once, not saturating my uplink.
-  - Easy to configure declaratively, re-use existing file-systems for multiple jobs, set up encryption, etc.
+  - well-behaved as a group: not all hammering the same upstream at once (One of the upstreams is a hetzner storage box, connection limit is tight).
 
 ## Feature / todo list
 
@@ -33,6 +32,7 @@ As this is a learning project code will be mostly hand-written.
 
 However Claude will be used in this project to:
 - Review code and give suggestions on making it more idiomatic Go.
+- Perform mechanistic actions, e.g.: reading CLI documentation and turn it into struct fields for `RCloneRemoteSpec`. The rule here is I define structure, these types/structs exist and this is how they go together, Claude fills in details/struct fields.
 - Generate (additional) test cases, especially in table-based tests. These will be marked as such via comment.
 - In general to generate suggestions/input for:
   - Useful dependencies

@@ -1,0 +1,9 @@
+apiVersion: rco.frozenbits.se/v1alpha1
+kind: RCloneClusterRemote
+metadata:
+  labels:
+    app.kubernetes.io/name: rclone-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: rcloneclusterremote-sample
+spec:
+  # TODO(user): Add fields here

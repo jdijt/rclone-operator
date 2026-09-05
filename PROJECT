@@ -8,4 +8,19 @@ layout:
 - go.kubebuilder.io/v4
 projectName: rclone-operator
 repo: github.com/jdijt/rclone-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: rco.frozenbits.se
+  kind: RCloneRemote
+  path: github.com/jdijt/rclone-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+  domain: rco.frozenbits.se
+  kind: RCloneClusterRemote
+  path: github.com/jdijt/rclone-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

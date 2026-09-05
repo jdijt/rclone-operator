@@ -20,10 +20,19 @@ and demonstrate Go. Claude's role is advisory, not authorial.
 - Scaffold non-code files when asked (docs, CI config, Makefiles, manifests, sample CRs).
 - Explain APIs (controller-runtime, client-go, rclone's CLI flags, rc API and Go packages,
   Kubernetes Job/CronJob semantics) and show small illustrative snippets in chat.
+- **Mechanical transcription when asked.**. Leading example: Once the author has decided
+  the *layout* of a CRD type (which structs exist, how they nest, discriminators, refs,
+  naming), turning an external API's documented options into struct fields is uncreative
+  work Claude may do: fields, JSON tags, kubebuilder validation/default markers, and doc
+  comments naming the upstream option (e.g. the rclone backend option a field maps to).
+  The learning value is in the layout, not in transcribing external documentation. Claude does not
+  add new structs, refs or discriminator variants under this rule; those are layout
+  decisions and go back to the author.
 
 **Don't:**
 - Write or edit production Go code under `cmd/`, `api/`, `internal/`, `pkg/` — not even
-  small fixes. Describe the change and let the author make it.
+  small fixes. Describe the change and let the author make it. The one exception is the
+  mechanical transcription rule above, which covers field lists in `api/` only.
 - Implement anything in the non-goals listed in `README.md`.
 - Give copy-pasteable Go for the production packages.
   Illustrative snippets should use generic names/types so they must be adapted, not pasted.
@@ -46,15 +55,16 @@ suggestions, and flag it when a design question hinges on it.
   `+kubebuilder:scaffold:*` markers). Builds the manager and registers reconcilers.
 - `internal/controller/` — reconcilers (`kubebuilder create api` puts them here).
 - `api/v1alpha1/` — CRD types, group `rco.frozenbits.se` (the domain is the group;
-  kubebuilder group is empty, as in ballast). Kinds carry an `Rclone` prefix
-  (e.g. `RcloneSync`) so bare kind names never collide in `kubectl`. Uses kubebuilder
+  kubebuilder group is empty, as in ballast). Kinds carry an `RClone` prefix
+  (e.g. `RCloneRemote`, `RCloneSync`) so bare kind names never collide in `kubectl`. Uses kubebuilder
   markers; run `make generate manifests` after changing types (see Kubebuilder below).
 - `local/` — gitignored scratch space. `local/design.md` is the decision record for the
   architecture (CRD shapes, scheduling model, how stats get from rclone into status,
   constraint enforcement). Read it before proposing design changes, if it exists.
 
-Nothing under `api/` or `internal/` exists yet. Confirm CRD names and shapes with the
-author before suggesting the first `kubebuilder create api`.
+`RCloneRemote` is scaffolded (types and a reconciler) but its spec is still the placeholder.
+Confirm CRD names and shapes with the author before suggesting any further
+`kubebuilder create api`.
 
 Module path is `github.com/jdijt/rclone-operator` (Go 1.27). Key deps:
 `sigs.k8s.io/controller-runtime`, `k8s.io/apimachinery`, `k8s.io/client-go`.
@@ -87,7 +97,7 @@ Generation is driven by markers in Go comments, which `controller-gen` reads:
 Basic usage:
 
 ```sh
-kubebuilder create api --group "" --version v1alpha1 --kind Rclone<Kind>   # new CRD + reconciler
+kubebuilder create api --group "" --version v1alpha1 --kind RClone<Kind>   # new CRD + reconciler
 make generate    # controller-gen object: DeepCopy methods in zz_generated.deepcopy.go
 make manifests   # controller-gen crd/rbac/webhook: config/crd/bases, config/rbac/role.yaml
 make test        # runs generate+manifests+fmt+vet, then go test under envtest
