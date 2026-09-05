@@ -19,6 +19,7 @@ resources:
   version: v1alpha1
 - api:
     crdVersion: v1
+  controller: true
   domain: rco.frozenbits.se
   kind: RCloneClusterRemote
   path: github.com/jdijt/rclone-operator/api/v1alpha1

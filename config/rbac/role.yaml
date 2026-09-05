@@ -5,26 +5,24 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
   - rco.frozenbits.se
   resources:
+  - rcloneclusterremotes
   - rcloneremotes
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - rco.frozenbits.se
   resources:
-  - rcloneremotes/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - rco.frozenbits.se
-  resources:
+  - rcloneclusterremotes/status
   - rcloneremotes/status
   verbs:
   - get

@@ -18,36 +18,62 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	rcofrozenbitssev1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
+	rcov1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 )
 
-// RCloneRemoteReconciler reconciles a RCloneRemote object
+// RCloneRemoteReconciler reconciles a RCloneRemote (Either cluster or namespace scoped) object
 type RCloneRemoteReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	APIReader         client.Reader
+	Scheme            *runtime.Scheme
+	OperatorNamespace string
+	Interval          time.Duration
+
+	newObject func() rcov1alpha1.RCloneRemoteInstance
 }
 
-// +kubebuilder:rbac:groups=rco.frozenbits.se,resources=rcloneremotes,verbs=get;list;watch;create;update;patch;delete
+func NewRCloneRemoteReconciler(mgr ctrl.Manager, ns string, d time.Duration) *RCloneRemoteReconciler {
+	return &RCloneRemoteReconciler{
+		Client:            mgr.GetClient(),
+		APIReader:         mgr.GetAPIReader(),
+		Scheme:            mgr.GetScheme(),
+		OperatorNamespace: ns,
+		Interval:          d,
+		newObject:         func() rcov1alpha1.RCloneRemoteInstance { return &rcov1alpha1.RCloneRemote{} },
+	}
+}
+
+func NewRCloneClusterRemoteReconciler(mgr ctrl.Manager, ns string, d time.Duration) *RCloneRemoteReconciler {
+	return &RCloneRemoteReconciler{
+		Client:            mgr.GetClient(),
+		APIReader:         mgr.GetAPIReader(),
+		Scheme:            mgr.GetScheme(),
+		OperatorNamespace: ns,
+		Interval:          d,
+		newObject: func() rcov1alpha1.RCloneRemoteInstance {
+			return &rcov1alpha1.RCloneClusterRemote{}
+		},
+	}
+}
+
+// +kubebuilder:rbac:groups=rco.frozenbits.se,resources=rcloneremotes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=rco.frozenbits.se,resources=rcloneremotes/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=rco.frozenbits.se,resources=rcloneremotes/finalizers,verbs=update
+// +kubebuilder:rbac:groups=rco.frozenbits.se,resources=rcloneclusterremotes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=rco.frozenbits.se,resources=rcloneclusterremotes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the RCloneRemote object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.24.1/pkg/reconcile
 func (r *RCloneRemoteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)
+
+	_ = r.newObject()
 
 	// TODO(user): your logic here
 
@@ -57,7 +83,6 @@ func (r *RCloneRemoteReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // SetupWithManager sets up the controller with the Manager.
 func (r *RCloneRemoteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&rcofrozenbitssev1alpha1.RCloneRemote{}).
-		Named("rcloneremote").
+		For(r.newObject()).
 		Complete(r)
 }

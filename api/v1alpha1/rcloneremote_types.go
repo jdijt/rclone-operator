@@ -306,6 +306,13 @@ type RCloneRemote struct {
 	Status RCloneRemoteStatus `json:"status,omitzero"`
 }
 
+func (r *RCloneRemote) GetRCloneRemoteSpec() *RCloneRemoteSpec {
+	return &r.Spec
+}
+func (r *RCloneRemote) GetRCloneRemoteStatus() *RCloneRemoteStatus {
+	return &r.Status
+}
+
 // +kubebuilder:object:root=true
 
 // RCloneRemoteList contains a list of RCloneRemote

@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -62,6 +63,8 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	var operatorNamespace string
+	var validationInterval time.Duration
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -79,6 +82,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&operatorNamespace, "operator-namespace", "", "Namespace the operator runs in")
+	flag.DurationVar(&validationInterval, "validation-interval", 5*time.Minute, "Interval at which objects are re-validated")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -86,6 +91,11 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	if operatorNamespace == "" {
+		setupLog.Error(nil, "Operator namespace not provided. Please set \"operator-namespace\" flag.")
+		os.Exit(1)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -178,13 +188,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.RCloneRemoteReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	if err := (controller.NewRCloneRemoteReconciler(mgr, operatorNamespace, validationInterval)).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "rcloneremote")
 		os.Exit(1)
 	}
+	if err := (controller.NewRCloneClusterRemoteReconciler(mgr, operatorNamespace, validationInterval)).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "rcloneclusterremote")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
