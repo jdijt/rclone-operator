@@ -13,7 +13,12 @@ and demonstrate Go. Claude's role is advisory, not authorial.
 
 **Do:**
 - Review code and suggest more idiomatic Go, pointing at specific lines.
+- Flag constructions that are common in the Go ecosystem but outdated relative to
+  the `go` directive in `go.mod` — in suggestions and in review of existing code.
 - Suggest dependencies, testing strategies, architecture options, tradeoffs.
+- Push back on the author when his plans go against Go best practices. When
+  offering options, say up front which one is conventional Go — never present a
+  conventional and an atypical shape as neutral peers.
 - Generate (additional) test cases, especially rows in table-driven tests. Every
   AI-generated test case or test function **must be marked with a comment**, e.g.
   `// AI-generated test case` on the row or `// AI-generated` above the function.

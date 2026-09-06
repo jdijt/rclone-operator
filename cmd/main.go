@@ -63,7 +63,7 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
-	var operatorNamespace string
+	var ns string
 	var validationInterval time.Duration
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -82,8 +82,9 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&operatorNamespace, "operator-namespace", "", "Namespace the operator runs in")
-	flag.DurationVar(&validationInterval, "validation-interval", 5*time.Minute, "Interval at which objects are re-validated")
+	flag.StringVar(&ns, "operator-namespace", "", "Namespace the operator runs in")
+	flag.DurationVar(&validationInterval, "validation-interval",
+		5*time.Minute, "Interval at which objects are re-validated")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -92,7 +93,7 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	if operatorNamespace == "" {
+	if ns == "" {
 		setupLog.Error(nil, "Operator namespace not provided. Please set \"operator-namespace\" flag.")
 		os.Exit(1)
 	}
@@ -188,11 +189,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (controller.NewRCloneRemoteReconciler(mgr, operatorNamespace, validationInterval)).SetupWithManager(mgr); err != nil {
+	c, r := mgr.GetClient(), mgr.GetAPIReader()
+	if err := (controller.NewRCloneRemoteReconciler(c, r, ns, validationInterval)).
+		SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "rcloneremote")
 		os.Exit(1)
 	}
-	if err := (controller.NewRCloneClusterRemoteReconciler(mgr, operatorNamespace, validationInterval)).SetupWithManager(mgr); err != nil {
+	if err := (controller.NewRCloneClusterRemoteReconciler(c, r, ns, validationInterval)).
+		SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "rcloneclusterremote")
 		os.Exit(1)
 	}
