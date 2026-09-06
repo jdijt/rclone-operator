@@ -26,6 +26,8 @@ import (
 // +kubebuilder:resource:scope=Cluster
 
 // RCloneClusterRemote is the Schema for the rcloneclusterremotes API
+//
+// +kubebuilder:validation:XValidation:rule="self.spec.type == 'crypt' ? self.spec.crypt.remoteRef.kind == 'RCloneClusterRemote' : true",message="RCloneClusterRemote can only refer to other RCloneClusterRemotes."
 type RCloneClusterRemote struct {
 	metav1.TypeMeta `json:",inline"`
 

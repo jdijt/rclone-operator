@@ -92,8 +92,13 @@ spec:
                       (rclone option: remote, the part after the colon).
                     type: string
                   remoteRef:
-                    description: 'remoteRef references the remote to wrap (rclone
-                      option: remote).'
+                    description: |-
+                      remoteRef references the remote to wrap (rclone option: remote).
+
+                      On a RCloneRemote (namespace scoped) this can refer to:
+                      - Other RCloneRemotes in the same namespace
+                      - RCloneClusterRemotes.
+                      On an RCloneClusterRemote this can only refer to other RCloneClusterRemotes
                     properties:
                       kind:
                         default: RCloneRemote
@@ -203,6 +208,12 @@ spec:
                 - provider
                 - secretAccessKeyRef
                 type: object
+                x-kubernetes-validations:
+                - message: Endpoint must be specified for non-aws providers
+                  rule: 'self.provider != ''AWS'' ? has(self.endpoint) : true'
+                - message: endpoint must be a valid http/https URL
+                  rule: '!has(self.endpoint) || (isURL(self.endpoint) && url(self.endpoint).getScheme()
+                    in [''http'', ''https''])'
               sftp:
                 description: sftp configures an rclone sftp backend.
                 properties:
@@ -286,6 +297,9 @@ spec:
                 x-kubernetes-validations:
                 - message: one of passwordRef or privateKeyRef must be set
                   rule: has(self.passwordRef) || has(self.privateKeyRef)
+                - message: privateKeyPassphrase supplied but no private key used
+                  rule: 'has(self.privateKeyPassphraseRef) ? has(self.privateKeyRef)
+                    : true'
               template:
                 description: |-
                   template configures a remote from a free-form rclone connection string

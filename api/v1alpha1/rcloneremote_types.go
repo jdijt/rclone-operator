@@ -64,6 +64,12 @@ const (
 	RCBackendTypeTemplate RCBackendType = "template"
 )
 
+// SupportedRCBackendTypes all supported backend types in a collection.
+var SupportedRCBackendTypes = []RCBackendType{
+	RCBackendTypeSFTP, RCBackendTypeS3,
+	RCBackendTypeCrypt, RCBackendTypeTemplate,
+}
+
 // SecretKeyRef selects a single key of a Secret. For a namespaced RCloneRemote the
 // Secret is looked up in the remote's namespace; for an RCloneClusterRemote it is
 // looked up in the operator's namespace.
@@ -106,6 +112,7 @@ type RemoteRef struct {
 // privateKeyRef must be set.
 //
 // +kubebuilder:validation:XValidation:rule="has(self.passwordRef) || has(self.privateKeyRef)",message="one of passwordRef or privateKeyRef must be set"
+// +kubebuilder:validation:XValidation:rule="has(self.privateKeyPassphraseRef) ? has(self.privateKeyRef) : true",message="privateKeyPassphrase supplied but no private key used"
 type SftpBackend struct {
 	// host to connect to (rclone option: host).
 	// +required
@@ -148,6 +155,9 @@ type SftpBackend struct {
 
 // S3Backend maps to rclone's s3 backend. The bucket is not part of the remote; it is
 // the first path element on the sync endpoint, as in rclone.
+//
+// +kubebuilder:validation:XValidation:rule="self.provider != 'AWS' ? has(self.endpoint) : true",message="Endpoint must be specified for non-aws providers"
+// +kubebuilder:validation:XValidation:rule="!has(self.endpoint) || (isURL(self.endpoint) && url(self.endpoint).getScheme() in ['http', 'https'])",message="endpoint must be a valid http/https URL"
 type S3Backend struct {
 	// provider is the rclone s3 provider name, e.g. AWS, Minio, Ceph, Wasabi, Other
 	// (rclone option: provider).
@@ -217,6 +227,12 @@ const (
 // CryptBackend maps to rclone's crypt backend, which encrypts another remote.
 type CryptBackend struct {
 	// remoteRef references the remote to wrap (rclone option: remote).
+	//
+	// On a RCloneRemote (namespace scoped) this can refer to:
+	// - Other RCloneRemotes in the same namespace
+	// - RCloneClusterRemotes.
+	// On an RCloneClusterRemote this can only refer to other RCloneClusterRemotes
+	//
 	// +required
 	RemoteRef RemoteRef `json:"remoteRef"`
 
