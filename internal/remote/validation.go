@@ -18,7 +18,6 @@ package remote
 
 import (
 	"fmt"
-	"strings"
 	"text/template"
 	"text/template/parse"
 
@@ -26,7 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
-// ValidateRCloneInstance statically validates an rclone remote.
+// ValidateRCloneRemoteSpec statically validates an rclone remote,
+// where this is not already handled by the APIServer via CEL rules.
 func ValidateRCloneRemoteSpec(spec *rcov1alpha1.RCloneRemoteSpec) field.ErrorList {
 	path := field.NewPath("spec")
 	var allErrs field.ErrorList
@@ -68,17 +68,12 @@ func ValidateRCloneRemoteSpec(spec *rcov1alpha1.RCloneRemoteSpec) field.ErrorLis
 func validateTemplateBackend(spec *rcov1alpha1.TemplateBackend, path *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 
-	trimmedTemplate := strings.TrimSpace(spec.Template)
-	if len(trimmedTemplate) == 0 {
+	normalizedTemplate := normalizeTemplate(spec.Template)
+	if len(normalizedTemplate) == 0 {
 		return append(allErrs, field.Required(path.Child("template"), "must be specified and not blank"))
 	}
 
-	declaredFields := make(map[string]bool)
-	for k := range spec.Inputs {
-		declaredFields[k] = true
-	}
-
-	t, err := template.New("template").Parse(trimmedTemplate)
+	t, err := template.New("template").Parse(normalizedTemplate)
 	if err != nil {
 		return append(allErrs, field.Invalid(
 			path.Child("template"),
@@ -89,10 +84,10 @@ func validateTemplateBackend(spec *rcov1alpha1.TemplateBackend, path *field.Path
 
 	// This can be, for example, due to the template being one big comment.
 	if len(t.Root.Nodes) == 0 {
-		return append(allErrs, field.Invalid(path.Child("template"), trimmedTemplate, "must produce output (not only a comment)"))
+		return append(allErrs, field.Invalid(path.Child("template"), normalizedTemplate, "must produce output (not only a comment, blank, etc..)"))
 	}
 
-	allErrs = append(allErrs, validateTemplateReferences(t.Root, declaredFields, t.Tree, path.Child("template"))...)
+	allErrs = append(allErrs, validateTemplateReferences(t.Root, spec.Inputs, t.Tree, path.Child("template"))...)
 
 	return allErrs
 }
@@ -102,11 +97,12 @@ func validateTemplateBackend(spec *rcov1alpha1.TemplateBackend, path *field.Path
 // i.e.: {{ .field }}.
 //
 // This is implemented on an allow-list principle.
-// Only "ListNode", "TextNode" and a single specific shape of "ActionNode" is allowed.
-func validateTemplateReferences(node parse.Node, declaredFields map[string]bool, tree *parse.Tree, p *field.Path) field.ErrorList {
+// Only "ListNode", "TextNode" and a single specific shape of "ActionNode" are allowed.
+func validateTemplateReferences(node parse.Node, declaredFields map[string]rcov1alpha1.SecretKeyRef, tree *parse.Tree, p *field.Path) field.ErrorList {
 	switch node := node.(type) {
 	case *parse.ListNode:
-		allErrs := make(field.ErrorList, 0, len(node.Nodes))
+		//nolint:prealloc  // usually empty.
+		var allErrs field.ErrorList
 		for _, child := range node.Nodes {
 			allErrs = append(allErrs, validateTemplateReferences(child, declaredFields, tree, p)...)
 		}
@@ -131,7 +127,7 @@ func validateTemplateReferences(node parse.Node, declaredFields map[string]bool,
 		if len(fieldNode.Ident) != 1 {
 			return unsupportedTemplateConstruct(node, tree, p)
 		}
-		if !declaredFields[fieldNode.Ident[0]] {
+		if _, fieldExists := declaredFields[fieldNode.Ident[0]]; !fieldExists {
 			return field.ErrorList{field.Invalid(
 				p, node.String(),
 				fmt.Sprintf("reference to undeclared field %s", fieldNode.Ident[0]),

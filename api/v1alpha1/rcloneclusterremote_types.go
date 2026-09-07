@@ -24,10 +24,15 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
+//
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.type`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].reason`,priority=1
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // RCloneClusterRemote is the Schema for the rcloneclusterremotes API
 //
-// +kubebuilder:validation:XValidation:rule="self.spec.type == 'crypt' ? self.spec.crypt.remoteRef.kind == 'RCloneClusterRemote' : true",message="RCloneClusterRemote can only refer to other RCloneClusterRemotes."
+// +kubebuilder:validation:XValidation:rule="has(self.spec.crypt) ? self.spec.crypt.remoteRef.kind == 'RCloneClusterRemote' : true",message="RCloneClusterRemote can only refer to other RCloneClusterRemotes."
 type RCloneClusterRemote struct {
 	metav1.TypeMeta `json:",inline"`
 

@@ -14,7 +14,21 @@ spec:
     singular: rcloneclusterremote
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      name: Reason
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: RCloneClusterRemote is the Schema for the rcloneclusterremotes
@@ -435,7 +449,7 @@ spec:
         type: object
         x-kubernetes-validations:
         - message: RCloneClusterRemote can only refer to other RCloneClusterRemotes.
-          rule: 'self.spec.type == ''crypt'' ? self.spec.crypt.remoteRef.kind == ''RCloneClusterRemote''
+          rule: 'has(self.spec.crypt) ? self.spec.crypt.remoteRef.kind == ''RCloneClusterRemote''
             : true'
     served: true
     storage: true

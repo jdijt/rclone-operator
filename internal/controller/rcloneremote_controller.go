@@ -29,24 +29,24 @@ import (
 
 // RCloneRemoteReconciler reconciles a RCloneRemote (Either cluster or namespace scoped) object
 type RCloneRemoteReconciler struct {
-	Client            client.Client
-	APIReader         client.Reader
-	OperatorNamespace string
-	Interval          time.Duration
+	Client               client.Client
+	APIReader            client.Reader
+	OperatorNamespace    string
+	RevalidationInterval time.Duration
 
 	newObject func() rcov1alpha1.RCloneRemoteInstance
 }
 
-func NewRCloneRemoteReconciler(c client.Client, r client.Reader, ns string, d time.Duration) *RCloneRemoteReconciler {
+func NewRCloneRemoteReconciler(mgrClient client.Client, reader client.Reader, operatorNamespace string, revalidationInterval time.Duration) *RCloneRemoteReconciler {
 	return &RCloneRemoteReconciler{
-		Client: c, APIReader: r, OperatorNamespace: ns, Interval: d,
+		Client: mgrClient, APIReader: reader, OperatorNamespace: operatorNamespace, RevalidationInterval: revalidationInterval,
 		newObject: func() rcov1alpha1.RCloneRemoteInstance { return &rcov1alpha1.RCloneRemote{} },
 	}
 }
 
-func NewRCloneClusterRemoteReconciler(c client.Client, r client.Reader, ns string, d time.Duration) *RCloneRemoteReconciler {
+func NewRCloneClusterRemoteReconciler(mgrClient client.Client, reader client.Reader, operatorNamespace string, revalidationInterval time.Duration) *RCloneRemoteReconciler {
 	return &RCloneRemoteReconciler{
-		Client: c, APIReader: r, OperatorNamespace: ns, Interval: d,
+		Client: mgrClient, APIReader: reader, OperatorNamespace: operatorNamespace, RevalidationInterval: revalidationInterval,
 		newObject: func() rcov1alpha1.RCloneRemoteInstance { return &rcov1alpha1.RCloneClusterRemote{} },
 	}
 }

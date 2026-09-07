@@ -36,7 +36,7 @@ type RCloneRemoteSpec struct {
 
 	// sftp configures an rclone sftp backend.
 	// +optional
-	SFTP *SftpBackend `json:"sftp,omitempty"`
+	SFTP *SFTPBackend `json:"sftp,omitempty"`
 
 	// crypt configures an rclone crypt backend wrapping another remote.
 	// +optional
@@ -108,12 +108,12 @@ type RemoteRef struct {
 	Name string `json:"name"`
 }
 
-// SftpBackend maps to rclone's sftp backend. At least one of passwordRef or
+// SFTPBackend maps to rclone's sftp backend. At least one of passwordRef or
 // privateKeyRef must be set.
 //
 // +kubebuilder:validation:XValidation:rule="has(self.passwordRef) || has(self.privateKeyRef)",message="one of passwordRef or privateKeyRef must be set"
 // +kubebuilder:validation:XValidation:rule="has(self.privateKeyPassphraseRef) ? has(self.privateKeyRef) : true",message="privateKeyPassphrase supplied but no private key used"
-type SftpBackend struct {
+type SFTPBackend struct {
 	// host to connect to (rclone option: host).
 	// +required
 	// +kubebuilder:validation:MinLength=1
@@ -290,10 +290,8 @@ type RCloneRemoteStatus struct {
 	// conditions represent the current state of the RCloneRemote resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
 	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
+	// Condition types include:
+	// - "Ready": the resource is ready to use in sync jobs.
 	//
 	// The status of each condition is one of True, False, or Unknown.
 	// +listType=map
@@ -304,6 +302,11 @@ type RCloneRemoteStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+//
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.type`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].reason`,priority=1
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // RCloneRemote is the Schema for the rcloneremotes API
 type RCloneRemote struct {

@@ -64,7 +64,7 @@ func main() {
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
 	var ns string
-	var validationInterval time.Duration
+	var revalidationInterval time.Duration
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -83,7 +83,7 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&ns, "operator-namespace", "", "Namespace the operator runs in")
-	flag.DurationVar(&validationInterval, "validation-interval",
+	flag.DurationVar(&revalidationInterval, "validation-interval",
 		5*time.Minute, "Interval at which objects are re-validated")
 	opts := zap.Options{
 		Development: true,
@@ -190,12 +190,12 @@ func main() {
 	}
 
 	c, r := mgr.GetClient(), mgr.GetAPIReader()
-	if err := (controller.NewRCloneRemoteReconciler(c, r, ns, validationInterval)).
+	if err := (controller.NewRCloneRemoteReconciler(c, r, ns, revalidationInterval)).
 		SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "rcloneremote")
 		os.Exit(1)
 	}
-	if err := (controller.NewRCloneClusterRemoteReconciler(c, r, ns, validationInterval)).
+	if err := (controller.NewRCloneClusterRemoteReconciler(c, r, ns, revalidationInterval)).
 		SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "rcloneclusterremote")
 		os.Exit(1)
