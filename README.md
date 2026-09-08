@@ -25,6 +25,9 @@ rclone-operator is a project I took on for the following reasons:
 
 ?? Lets see ;) ??
 
+## Cluster/Controller Dependencies
+
+- *Cert manager* The default install assumes cert-manager is installed in the cluster for webhook certificates.
 
 ## LLM Usage
 

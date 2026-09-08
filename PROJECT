@@ -17,6 +17,9 @@ resources:
   kind: RCloneRemote
   path: github.com/jdijt/rclone-operator/api/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
   controller: true
@@ -24,4 +27,7 @@ resources:
   kind: RCloneClusterRemote
   path: github.com/jdijt/rclone-operator/api/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 version: "3"

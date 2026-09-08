@@ -285,6 +285,12 @@ type TemplateBackend struct {
 	Inputs map[string]SecretKeyRef `json:"inputs,omitempty"`
 }
 
+const (
+	ReadyCondition = "Ready"
+	ReasonInvalid  = "InvalidSpec"
+	ReasonValid    = "Valid"
+)
+
 // RCloneRemoteStatus defines the observed state of RCloneRemote.
 type RCloneRemoteStatus struct {
 	// conditions represent the current state of the RCloneRemote resource.
