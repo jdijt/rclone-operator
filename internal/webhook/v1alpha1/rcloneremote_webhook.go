@@ -26,9 +26,6 @@ import (
 	rcofrozenbitssev1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 )
 
-// log is for logging in this package.
-var rcloneremotelog = logf.Log.WithName("rcloneremote-resource")
-
 // SetupRCloneRemoteWebhookWithManager registers the webhook for RCloneRemote in the manager.
 func SetupRCloneRemoteWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &rcofrozenbitssev1alpha1.RCloneRemote{}).
@@ -49,20 +46,20 @@ type RCloneRemoteCustomValidator struct {
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type RCloneRemote.
-func (v *RCloneRemoteCustomValidator) ValidateCreate(_ context.Context, obj *rcofrozenbitssev1alpha1.RCloneRemote) (admission.Warnings, error) {
-	rcloneremotelog.Info("Validation for RCloneRemote upon creation", "name", obj.GetName())
-	return nil, validateRCloneRemoteInstance(obj, obj.GroupVersionKind().GroupKind())
+func (v *RCloneRemoteCustomValidator) ValidateCreate(ctx context.Context, obj *rcofrozenbitssev1alpha1.RCloneRemote) (admission.Warnings, error) {
+	logf.FromContext(ctx).Info("Validation for RCloneRemote upon creation")
+	return nil, validateRCloneRemoteInstance(obj)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type RCloneRemote.
-func (v *RCloneRemoteCustomValidator) ValidateUpdate(_ context.Context, _, newObj *rcofrozenbitssev1alpha1.RCloneRemote) (admission.Warnings, error) {
-	rcloneremotelog.Info("Validation for RCloneRemote upon update", "name", newObj.GetName())
-	return nil, validateRCloneRemoteInstance(newObj, newObj.GroupVersionKind().GroupKind())
+func (v *RCloneRemoteCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *rcofrozenbitssev1alpha1.RCloneRemote) (admission.Warnings, error) {
+	logf.FromContext(ctx).Info("Validation for RCloneRemote upon update")
+	return nil, validateRCloneRemoteInstance(newObj)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type RCloneRemote.
 // No-op
-func (v *RCloneRemoteCustomValidator) ValidateDelete(_ context.Context, obj *rcofrozenbitssev1alpha1.RCloneRemote) (admission.Warnings, error) {
-	rcloneremotelog.Info("Validation for RCloneRemote upon deletion", "name", obj.GetName())
+func (v *RCloneRemoteCustomValidator) ValidateDelete(ctx context.Context, _ *rcofrozenbitssev1alpha1.RCloneRemote) (admission.Warnings, error) {
+	logf.FromContext(ctx).Info("Validation for RCloneRemote upon deletion")
 	return nil, nil
 }

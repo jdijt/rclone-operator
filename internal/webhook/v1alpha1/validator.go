@@ -20,13 +20,12 @@ import (
 	rcov1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 	"github.com/jdijt/rclone-operator/internal/remote"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // validateRCloneRemoteInstance wraps the validator to return a webhook compatible response.
-func validateRCloneRemoteInstance(inst rcov1alpha1.RCloneRemoteInstance, gk schema.GroupKind) error {
+func validateRCloneRemoteInstance(inst rcov1alpha1.RCloneRemoteInstance) error {
 	if errs := remote.ValidateRCloneRemoteSpec(inst.GetRCloneRemoteSpec()); len(errs) > 0 {
-		return apierrors.NewInvalid(gk, inst.GetName(), errs)
+		return apierrors.NewInvalid(inst.GetGroupKind(), inst.GetName(), errs)
 	}
 	return nil
 }

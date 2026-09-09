@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // +kubebuilder:object:root=true
@@ -52,8 +53,13 @@ type RCloneClusterRemote struct {
 func (r *RCloneClusterRemote) GetRCloneRemoteSpec() *RCloneRemoteSpec {
 	return &r.Spec
 }
+
 func (r *RCloneClusterRemote) GetRCloneRemoteStatus() *RCloneRemoteStatus {
 	return &r.Status
+}
+
+func (r *RCloneClusterRemote) GetGroupKind() schema.GroupKind {
+	return SchemeGroupVersion.WithKind("RCloneClusterRemote").GroupKind()
 }
 
 // +kubebuilder:object:root=true

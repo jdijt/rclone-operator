@@ -26,10 +26,6 @@ import (
 	rcofrozenbitssev1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 )
 
-// nolint:unused
-// log is for logging in this package.
-var rcloneclusterremotelog = logf.Log.WithName("rcloneclusterremote-resource")
-
 // SetupRCloneClusterRemoteWebhookWithManager registers the webhook for RCloneClusterRemote in the manager.
 func SetupRCloneClusterRemoteWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &rcofrozenbitssev1alpha1.RCloneClusterRemote{}).
@@ -50,22 +46,20 @@ type RCloneClusterRemoteCustomValidator struct {
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type RCloneClusterRemote.
-func (v *RCloneClusterRemoteCustomValidator) ValidateCreate(_ context.Context, obj *rcofrozenbitssev1alpha1.RCloneClusterRemote) (admission.Warnings, error) {
-	rcloneclusterremotelog.Info("Validation for RCloneClusterRemote upon creation", "name", obj.GetName())
-
-	return nil, validateRCloneRemoteInstance(obj, obj.GroupVersionKind().GroupKind())
+func (v *RCloneClusterRemoteCustomValidator) ValidateCreate(ctx context.Context, obj *rcofrozenbitssev1alpha1.RCloneClusterRemote) (admission.Warnings, error) {
+	logf.FromContext(ctx).Info("Validation for RCloneClusterRemote upon creation")
+	return nil, validateRCloneRemoteInstance(obj)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type RCloneClusterRemote.
-func (v *RCloneClusterRemoteCustomValidator) ValidateUpdate(_ context.Context, _, newObj *rcofrozenbitssev1alpha1.RCloneClusterRemote) (admission.Warnings, error) {
-	rcloneclusterremotelog.Info("Validation for RCloneClusterRemote upon update", "name", newObj.GetName())
-
-	return nil, validateRCloneRemoteInstance(newObj, newObj.GroupVersionKind().GroupKind())
+func (v *RCloneClusterRemoteCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *rcofrozenbitssev1alpha1.RCloneClusterRemote) (admission.Warnings, error) {
+	logf.FromContext(ctx).Info("Validation for RCloneClusterRemote upon update")
+	return nil, validateRCloneRemoteInstance(newObj)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type RCloneClusterRemote.
 // No-op
-func (v *RCloneClusterRemoteCustomValidator) ValidateDelete(_ context.Context, obj *rcofrozenbitssev1alpha1.RCloneClusterRemote) (admission.Warnings, error) {
-	rcloneclusterremotelog.Info("Validation for RCloneClusterRemote upon deletion", "name", obj.GetName())
+func (v *RCloneClusterRemoteCustomValidator) ValidateDelete(ctx context.Context, _ *rcofrozenbitssev1alpha1.RCloneClusterRemote) (admission.Warnings, error) {
+	logf.FromContext(ctx).Info("Validation for RCloneClusterRemote upon deletion")
 	return nil, nil
 }

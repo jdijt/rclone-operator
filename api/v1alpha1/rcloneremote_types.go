@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // RCloneRemoteSpec defines the desired state of RCloneRemote.
@@ -334,8 +335,13 @@ type RCloneRemote struct {
 func (r *RCloneRemote) GetRCloneRemoteSpec() *RCloneRemoteSpec {
 	return &r.Spec
 }
+
 func (r *RCloneRemote) GetRCloneRemoteStatus() *RCloneRemoteStatus {
 	return &r.Status
+}
+
+func (r *RCloneRemote) GetGroupKind() schema.GroupKind {
+	return SchemeGroupVersion.WithKind("RCloneRemote").GroupKind()
 }
 
 // +kubebuilder:object:root=true
