@@ -17,82 +17,72 @@ limitations under the License.
 package controller
 
 import (
-	"context"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
+	rcofrozenbitssev1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	rcofrozenbitssev1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+var k8sClient client.Client
 
-var (
-	ctx       context.Context
-	cancel    context.CancelFunc
-	testEnv   *envtest.Environment
-	cfg       *rest.Config
-	k8sClient client.Client
-)
-
-func TestControllers(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	RunSpecs(t, "Controller Suite")
+func TestMain(m *testing.M) {
+	os.Exit(run(m))
 }
 
-var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+func run(m *testing.M) int {
+	testEnv, cfg, err := startEnv()
+	if err != nil {
+		log.Printf("Failure starting test environment: %v", err)
+		return 1
+	}
+	defer teardown(testEnv)
 
-	ctx, cancel = context.WithCancel(context.TODO())
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	if err != nil {
+		log.Printf("Failure creating k8s client: %v", err)
+		return 1
+	}
 
-	var err error
-	err = rcofrozenbitssev1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
+	return m.Run()
+}
+
+func startEnv() (*envtest.Environment, *rest.Config, error) {
+
+	if err := rcofrozenbitssev1alpha1.AddToScheme(scheme.Scheme); err != nil {
+		return nil, nil, fmt.Errorf("adding types to scheme: %w", err)
+	}
 
 	// +kubebuilder:scaffold:scheme
+	// Note: this will insert AddToScheme + a gomega assertion, the latter needs to be removed manually.
 
-	By("bootstrapping test environment")
-	testEnv = &envtest.Environment{
+	testEnv := &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
-
-	// Retrieve the first found binary directory to allow running tests from IDEs
-	if getFirstFoundEnvTestBinaryDir() != "" {
-		testEnv.BinaryAssetsDirectory = getFirstFoundEnvTestBinaryDir()
+	if binaryDir := getFirstFoundEnvTestBinaryDir(); binaryDir != "" {
+		testEnv.BinaryAssetsDirectory = binaryDir
 	}
 
-	// cfg is defined in this file globally.
-	cfg, err = testEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(cfg).NotTo(BeNil())
+	cfg, err := testEnv.Start()
+	if err != nil {
+		return nil, nil, fmt.Errorf("starting test environment: %w", err)
+	}
+	return testEnv, cfg, err
+}
 
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(k8sClient).NotTo(BeNil())
-})
-
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	cancel()
-	Eventually(func() error {
-		return testEnv.Stop()
-	}, time.Minute, time.Second).Should(Succeed())
-})
+func teardown(testEnv *envtest.Environment) {
+	if err := testEnv.Stop(); err != nil {
+		log.Printf("Failure stopping test environment: %v", err)
+	}
+}
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
 // ENVTEST-based tests depend on specific binaries, usually located in paths set by
@@ -106,7 +96,7 @@ func getFirstFoundEnvTestBinaryDir() string {
 	basePath := filepath.Join("..", "..", "bin", "k8s")
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
-		logf.Log.Error(err, "Failed to read directory", "path", basePath)
+		log.Printf("Failed to read directory: path: %v, err: %v", basePath, err)
 		return ""
 	}
 	for _, entry := range entries {

@@ -135,8 +135,9 @@ make test        # full kubebuilder test pipeline (see above)
 
 - Standard Go style: `gofmt`, `go vet` clean; errors wrapped with `%w`; contexts first.
 - Prefer the standard library; propose a dependency before it gets added.
-- Table-driven tests with `t.Run` subtests for unit tests. The kubebuilder scaffold uses
-  Ginkgo/Gomega for envtest and e2e suites; keep that for those suites only.
+- Table-driven tests with `t.Run` subtests. The envtest suite (`internal/controller`) uses
+  plain `testing` too: `TestMain` starts/stops envtest, specs are `TestXxx` functions (Gomega
+  via `NewWithT(t)` is allowed for matchers). Only the e2e suite keeps the scaffold's Ginkgo.
 - Status is the source of truth for job statistics: use `metav1.Condition` for state,
   `metav1.Time` for timestamps, and explicit units in field names (`bytesTransferred`,
   `bytesPerSecond`), never ambiguous numbers.

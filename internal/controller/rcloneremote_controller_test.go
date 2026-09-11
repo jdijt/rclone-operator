@@ -16,59 +16,47 @@ limitations under the License.
 
 package controller
 
-/*
-var _ = Describe("RCloneRemote Controller", func() {
-	Context("When reconciling a resource", func() {
-		const (
-			resourceName      = "test-resource"
-			resourceNamespace = "default"
-		)
+import (
+	"testing"
 
-		ctx := context.Background()
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: resourceNamespace,
-		}
-		rcloneremote := &rcofrozenbitssev1alpha1.RCloneRemote{}
+	rcofrozenbitssev1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
+)
 
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind RCloneRemote")
-			err := k8sClient.Get(ctx, typeNamespacedName, rcloneremote)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &rcofrozenbitssev1alpha1.RCloneRemote{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: resourceNamespace,
-					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+func TestRCloneRemoteReconciler_Reconcile(t *testing.T) {
+
+}
+
+// Just the cluster-wide specific cases
+func TestRCloneRemoteReconciler_Reconcile_clusterwide(t *testing.T) {
+	log := logf.FromContext(t.Context())
+	tests := []struct {
+		name     string
+		object   *rcofrozenbitssev1alpha1.RCloneRemote
+		expected interface{} // ???
+	}{
+		{
+			name:     "Valid Record",
+			object:   nil,
+			expected: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: "rcloneremote-test-"}}
+			if err := k8sClient.Create(t.Context(), ns); err != nil {
+				t.Fatal("Cannot setup namespace for testcase")
 			}
-		})
+			test.object.Namespace = ns.Name
+			k8sClient.Create(t.Context(), test.object)
 
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &rcofrozenbitssev1alpha1.RCloneRemote{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance RCloneRemote")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			// No need to clean up, we generate unique namespace names
+			// And after testing the api server is cleared.
 		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &RCloneRemoteReconciler{
-				Client: k8sClient,
-			}
-
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
-		})
-	})
-})
-*/
+	}
+}
