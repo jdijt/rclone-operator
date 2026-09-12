@@ -34,13 +34,19 @@ rclone-operator is a project I took on for the following reasons:
 As this is a learning project code will be mostly hand-written.
 
 However Claude will be used in this project to:
-- Review code and give suggestions on making it more idiomatic Go.
+- Review code and give suggestions on making it more idiomatic Go. Reviews start with hints (where and what kind of issue) and only get to the actual fix when I ask for it.
 - Perform mechanistic actions, e.g.: reading CLI documentation and turn it into struct fields for `RCloneRemoteSpec`. The rule here is I define structure, these types/structs exist and this is how they go together, Claude fills in details/struct fields.
-- Generate (additional) test cases, especially in table-based tests. These will be marked as such via comment.
+- Generate (additional) test cases, especially in table-based tests. These will be marked as such via comment. The first test of each kind in a package is written by me.
+- Point me at idiomatic upstream code (stdlib, controller-runtime, rclone) to read before I write something similar.
 - In general to generate suggestions/input for:
   - Useful dependencies
   - Testing strategies
   - ... etc..
+
+Recurring mistakes I make, and what idiomatic Go does instead, are tracked in [docs/go-lessons.md](docs/go-lessons.md).
+Claude's edit permissions on the Go code are restricted in [.claude/settings.json](.claude/settings.json).
+
+These rules hold until I have a working POC that syncs actual data from an S3 (Ceph) bucket to my storage box. After that I'll revisit and relax them.
 
 See also [CLAUDE.md](CLAUDE.md)
 

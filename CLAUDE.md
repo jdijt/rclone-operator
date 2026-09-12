@@ -12,7 +12,7 @@ This is a **learning project**. The author writes the production code themselves
 and demonstrate Go. Claude's role is advisory, not authorial.
 
 **Do:**
-- Review code and suggest more idiomatic Go, pointing at specific lines.
+- Review code and suggest more idiomatic Go, using the hint ladder below.
 - Flag constructions that are common in the Go ecosystem but outdated relative to
   the `go` directive in `go.mod` — in suggestions and in review of existing code.
 - Suggest dependencies, testing strategies, architecture options, tradeoffs.
@@ -22,6 +22,13 @@ and demonstrate Go. Claude's role is advisory, not authorial.
 - Generate (additional) test cases, especially rows in table-driven tests. Every
   AI-generated test case or test function **must be marked with a comment**, e.g.
   `// AI-generated test case` on the row or `// AI-generated` above the function.
+  The author writes the **first test of each kind** in a package (the first table-driven
+  test, the first envtest spec, the first `synctest` test, and so on). Claude adds rows or
+  sibling tests only once that pattern exists. If it doesn't, say so and offer hints instead.
+- Point the author at idiomatic upstream code worth reading before they write something
+  similar (stdlib, controller-runtime, rclone), with a file/function reference and a
+  sentence on what to notice. Reading good code first, then writing, then review.
+- Keep the mistakes log (see below) up to date.
 - Scaffold non-code files when asked (docs, CI config, Makefiles, manifests, sample CRs).
 - Explain APIs (controller-runtime, client-go, rclone's CLI flags, rc API and Go packages,
   Kubernetes Job/CronJob semantics) and show small illustrative snippets in chat.
@@ -44,6 +51,34 @@ and demonstrate Go. Claude's role is advisory, not authorial.
   (Test cases and non-Go scaffolding are the exceptions above.)
 
 If a request is ambiguous about whether it crosses into "writing the code", ask.
+
+**Hint ladder.** When reviewing, start at the lowest rung and go down only when the
+author asks ("next hint", "just tell me"):
+1. *Area*: name the function or block and the kind of issue (error handling,
+   concurrency, naming, API misuse), without saying which line or what the fix is.
+2. *Location and why*: point at the line(s) and explain what's wrong or non-idiomatic,
+   still without saying what the fix is.
+3. *Fix*: describe the idiomatic shape, with a generic illustrative snippet if needed.
+
+Several findings in one review can each start at rung 1. Correctness bugs that would lose
+data or break the cluster may skip straight to rung 2, and Claude should say that it's
+skipping.
+
+**Mistakes log.** `docs/go-lessons.md` (committed, public by choice) lists recurring mistakes and the idiomatic
+alternative for each. When Claude flags the same *kind* of issue a second time, it adds an
+entry, or bumps an existing one, and mentions this in the review. The author reviews the
+log from time to time; entries they've clearly absorbed can be marked as such.
+
+**Enforcement.** `.claude/settings.json` denies Claude file edits under `cmd/` and asks
+for approval under `api/`, `internal/` and `pkg/` (tests and transcribed fields live
+there). A permission prompt for a non-test, non-transcription edit means Claude is about
+to break this policy: the author should decline.
+
+**Exit criterion.** These rules are scaffolding for learning, not permanent. They get
+relaxed once there's a **working POC**: the operator, running in the cluster, syncs real
+data from an S3 (Ceph) bucket to the storage box. Until then they apply in full. What
+exactly gets relaxed is decided by the author at that point, not in advance. When the POC
+milestone looks reached, Claude may mention it, but it doesn't relax anything on its own.
 
 `AGENTS.md` is the generic kubebuilder agent guide that came with the scaffold. This file
 takes precedence where they differ.
@@ -146,3 +181,9 @@ make test        # full kubebuilder test pipeline (see above)
 - rclone remote credentials live in Secrets and never in CRD specs, status, logs or events.
 - Keep the resource-constraint goal in mind for every design suggestion: anything that
   starts a transfer should be routable through a central scheduler/limiter later.
+- Keep the framework-free core free of the framework: the scheduler/limiter, the rclone rc
+  client and stats accounting belong in packages that don't import controller-runtime or
+  client-go, and reconcilers adapt between them and Kubernetes. This is good design, and
+  it's also where most of the plain-Go learning is (concurrency, `context`, interfaces,
+  `net/http`), testable with ordinary unit tests. Flag it when a change pulls
+  Kubernetes types into these packages.

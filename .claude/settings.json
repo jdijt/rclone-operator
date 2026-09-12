@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(/cmd/**)",
+      "Write(/cmd/**)"
+    ],
+    "ask": [
+      "Edit(/api/**)",
+      "Write(/api/**)",
+      "Edit(/internal/**)",
+      "Write(/internal/**)",
+      "Edit(/pkg/**)",
+      "Write(/pkg/**)",
+      "mcp__goland__apply_patch",
+      "mcp__goland__create_new_file",
+      "mcp__goland__rename_refactoring",
+      "mcp__goland__reformat_file"
+    ]
+  }
+}
