@@ -18,16 +18,12 @@ package v1alpha1
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -43,106 +39,120 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+// AI-generated: moved from the Ginkgo scaffold to TestMain, following internal/controller/suite_test.go.
 
-var (
-	ctx       context.Context
-	cancel    context.CancelFunc
-	k8sClient client.Client
-	cfg       *rest.Config
-	testEnv   *envtest.Environment
-)
+var k8sClient client.Client
 
-func TestAPIs(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	RunSpecs(t, "Webhook Suite")
+func TestMain(m *testing.M) {
+	os.Exit(run(m))
 }
 
-var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+func run(m *testing.M) int {
+	logf.SetLogger(zap.New(zap.WriteTo(os.Stderr), zap.UseDevMode(true)))
 
-	ctx, cancel = context.WithCancel(context.TODO())
+	testEnv, cfg, err := startEnv()
+	if err != nil {
+		log.Printf("Failure starting test environment: %v", err)
+		return 1
+	}
+	defer teardown(testEnv)
 
-	var err error
-	err = rcofrozenbitssev1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	if err != nil {
+		log.Printf("Failure creating k8s client: %v", err)
+		return 1
+	}
+
+	stopWebhookServer, err := startWebhookServer(cfg, &testEnv.WebhookInstallOptions)
+	if err != nil {
+		log.Printf("Failure starting webhook server: %v", err)
+		return 1
+	}
+	// Deferred after teardown, so it runs first: the API server outlives the webhook server.
+	defer stopWebhookServer()
+
+	return m.Run()
+}
+
+func startEnv() (*envtest.Environment, *rest.Config, error) {
+	if err := rcofrozenbitssev1alpha1.AddToScheme(scheme.Scheme); err != nil {
+		return nil, nil, fmt.Errorf("adding types to scheme: %w", err)
+	}
 
 	// +kubebuilder:scaffold:scheme
+	// Note: this will insert AddToScheme + a gomega assertion, the latter needs to be removed manually.
 
-	By("bootstrapping test environment")
-	testEnv = &envtest.Environment{
+	testEnv := &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: false,
-
+		ErrorIfCRDPathMissing: true,
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
 			Paths: []string{filepath.Join("..", "..", "..", "config", "webhook")},
 		},
 	}
-
-	// Retrieve the first found binary directory to allow running tests from IDEs
-	if getFirstFoundEnvTestBinaryDir() != "" {
-		testEnv.BinaryAssetsDirectory = getFirstFoundEnvTestBinaryDir()
+	if binaryDir := getFirstFoundEnvTestBinaryDir(); binaryDir != "" {
+		testEnv.BinaryAssetsDirectory = binaryDir
 	}
 
-	// cfg is defined in this file globally.
-	cfg, err = testEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(cfg).NotTo(BeNil())
+	cfg, err := testEnv.Start()
+	if err != nil {
+		return nil, nil, fmt.Errorf("starting test environment: %w", err)
+	}
+	return testEnv, cfg, nil
+}
 
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(k8sClient).NotTo(BeNil())
-
-	// start webhook server using Manager.
-	webhookInstallOptions := &testEnv.WebhookInstallOptions
+// startWebhookServer runs a manager serving the webhooks on the address envtest registered
+// them under, and waits until it accepts connections. The returned func stops the manager.
+func startWebhookServer(cfg *rest.Config, opts *envtest.WebhookInstallOptions) (func(), error) {
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		WebhookServer: webhook.NewServer(webhook.Options{
-			Host:    webhookInstallOptions.LocalServingHost,
-			Port:    webhookInstallOptions.LocalServingPort,
-			CertDir: webhookInstallOptions.LocalServingCertDir,
+			Host:    opts.LocalServingHost,
+			Port:    opts.LocalServingPort,
+			CertDir: opts.LocalServingCertDir,
 		}),
 		LeaderElection: false,
 		Metrics:        metricsserver.Options{BindAddress: "0"},
 	})
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		return nil, fmt.Errorf("creating manager: %w", err)
+	}
 
-	err = SetupRCloneRemoteWebhookWithManager(mgr)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = SetupRCloneClusterRemoteWebhookWithManager(mgr)
-	Expect(err).NotTo(HaveOccurred())
+	if err := SetupRCloneRemoteWebhookWithManager(mgr); err != nil {
+		return nil, fmt.Errorf("setting up RCloneRemote webhook: %w", err)
+	}
+	if err := SetupRCloneClusterRemoteWebhookWithManager(mgr); err != nil {
+		return nil, fmt.Errorf("setting up RCloneClusterRemote webhook: %w", err)
+	}
 
 	// +kubebuilder:scaffold:webhook
 
-	go func() {
-		defer GinkgoRecover()
-		err = mgr.Start(ctx)
-		Expect(err).NotTo(HaveOccurred())
-	}()
-
-	// wait for the webhook server to get ready.
-	dialer := &net.Dialer{Timeout: time.Second}
-	addrPort := fmt.Sprintf("%s:%d", webhookInstallOptions.LocalServingHost, webhookInstallOptions.LocalServingPort)
-	Eventually(func() error {
-		conn, err := tls.DialWithDialer(dialer, "tcp", addrPort, &tls.Config{InsecureSkipVerify: true})
-		if err != nil {
-			return err
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- mgr.Start(ctx) }()
+	stop := func() {
+		cancel()
+		if err := <-done; err != nil {
+			log.Printf("Failure running manager: %v", err)
 		}
+	}
 
-		return conn.Close()
-	}).Should(Succeed())
-})
+	started := mgr.GetWebhookServer().StartedChecker()
+	deadline := time.Now().Add(10 * time.Second)
+	for err := started(nil); err != nil; err = started(nil) {
+		if time.Now().After(deadline) {
+			stop()
+			return nil, fmt.Errorf("waiting for webhook server: %w", err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return stop, nil
+}
 
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	cancel()
-	Eventually(func() error {
-		return testEnv.Stop()
-	}, time.Minute, time.Second).Should(Succeed())
-})
+func teardown(testEnv *envtest.Environment) {
+	if err := testEnv.Stop(); err != nil {
+		log.Printf("Failure stopping test environment: %v", err)
+	}
+}
 
 // getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
 // ENVTEST-based tests depend on specific binaries, usually located in paths set by
@@ -156,7 +166,7 @@ func getFirstFoundEnvTestBinaryDir() string {
 	basePath := filepath.Join("..", "..", "..", "bin", "k8s")
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
-		logf.Log.Error(err, "Failed to read directory", "path", basePath)
+		log.Printf("Failed to read directory: path: %v, err: %v", basePath, err)
 		return ""
 	}
 	for _, entry := range entries {
