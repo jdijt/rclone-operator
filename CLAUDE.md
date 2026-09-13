@@ -57,7 +57,7 @@ author asks ("next hint", "just tell me"):
 1. *Area*: name the function or block and the kind of issue (error handling,
    concurrency, naming, API misuse), without saying which line or what the fix is.
 2. *Location and why*: point at the line(s) and explain what's wrong or non-idiomatic,
-   still without saying what the fix is.
+   still without saying what the fix is. 
 3. *Fix*: describe the idiomatic shape, with a generic illustrative snippet if needed.
 
 Several findings in one review can each start at rung 1. Correctness bugs that would lose
@@ -80,9 +80,6 @@ data from an S3 (Ceph) bucket to the storage box. Until then they apply in full.
 exactly gets relaxed is decided by the author at that point, not in advance. When the POC
 milestone looks reached, Claude may mention it, but it doesn't relax anything on its own.
 
-`AGENTS.md` is the generic kubebuilder agent guide that came with the scaffold. This file
-takes precedence where they differ.
-
 ## Project layout
 
 rclone-operator is a **single binary** (`rclone-operator`) deployed as one **Deployment**
@@ -94,6 +91,7 @@ suggestions, and flag it when a design question hinges on it.
 - `cmd/main.go` — the only entrypoint (kubebuilder-managed: keep the
   `+kubebuilder:scaffold:*` markers). Builds the manager and registers reconcilers.
 - `internal/controller/` — reconcilers (`kubebuilder create api` puts them here).
+- `internal/webhook/` — validating/defaulting webhooks (`kubebuilder create webhook`).
 - `api/v1alpha1/` — CRD types, group `rco.frozenbits.se` (the domain is the group;
   kubebuilder group is empty, as in ballast). Kinds carry an `RClone` prefix
   (e.g. `RCloneRemote`, `RCloneSync`) so bare kind names never collide in `kubectl`. Uses kubebuilder
@@ -116,9 +114,20 @@ The project is scaffolded with **kubebuilder** (v4 layout, `go.kubebuilder.io/v4
 
 - `PROJECT` — scaffold metadata; edited by `kubebuilder` commands, not by hand.
 - `config/` — kustomize manifests: `crd/bases/` (generated CRDs), `rbac/` (generated
-  `role.yaml` plus leader-election/metrics roles), `manager/`, `default/`,
-  `prometheus/`, `network-policy/`, `samples/` (example CRs, hand-edited).
+  `role.yaml` plus leader-election/metrics roles), `webhook/` (generated
+  `manifests.yaml`), `certmanager/`, `manager/`, `default/`, `prometheus/`,
+  `network-policy/`, `samples/` (example CRs, hand-edited).
 - `api/<version>/zz_generated.deepcopy.go` — generated; never edit.
+- `// +kubebuilder:scaffold:*` comments — injection points for the CLI; never remove them.
+
+Scaffold new APIs and webhooks with `kubebuilder create api` / `kubebuilder create webhook`
+rather than by hand, and don't move scaffolded files: the CLI expects fixed paths.
+`kubebuilder create webhook --force` overwrites existing webhook files, so custom logic must
+be backed up first and restored afterwards.
+
+The scaffold's generic `AGENTS.md` was removed on purpose (its essentials live here, and
+parts of it contradicted this file). If a kubebuilder upgrade or `kubebuilder alpha generate`
+recreates it, delete it again.
 - `hack/boilerplate.go.txt` — Apache-2.0 header (`YEAR` placeholder). `make generate`
   stamps it into generated files; `make license` prepends it to any `.go` file lacking it
   and runs automatically as part of `fmt` (so `build`/`run`/`test`). `make license-check`
@@ -153,6 +162,11 @@ marker, and commit the regenerated files alongside the change. Tools (`controlle
 `kustomize`, `setup-envtest`, `golangci-lint`) are pinned in the Makefile and installed
 into `bin/` on first use.
 
+References worth citing in review: the
+[Kubebuilder good practices](https://book.kubebuilder.io/reference/good-practices.html),
+the [Kubernetes API conventions](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md)
+and the [controller-runtime FAQ](https://github.com/kubernetes-sigs/controller-runtime/blob/main/FAQ.md).
+
 Keep `+kubebuilder:rbac` verbs minimal. If the controller ends up creating Jobs/Pods for
 rclone, it needs RBAC on those core/batch resources and on the Secrets holding rclone
 remote configs — call that out explicitly when it comes up.
@@ -178,6 +192,14 @@ make test        # full kubebuilder test pipeline (see above)
   `bytesPerSecond`), never ambiguous numbers.
 - Reconciliation must be idempotent and safe against restarts: a controller restart
   mid-sync must not lose or double-count statistics, nor start a duplicate sync.
+- Controller practices to check in review: owner references (`SetControllerReference`) on
+  anything the controller creates; watch secondary resources with `.Owns()`/`.Watches()`
+  rather than polling with `RequeueAfter`; finalizers for cleanup outside the cluster;
+  re-fetch before updating to avoid conflicts.
+- Logging via `log.FromContext(ctx)` with balanced key/value pairs, following the
+  [Kubernetes message style](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md#message-style-guidelines):
+  capitalised, no trailing period, past tense, names the object type
+  (`"Created Job"`, `"Could not delete Pod"`).
 - rclone remote credentials live in Secrets and never in CRD specs, status, logs or events.
 - Keep the resource-constraint goal in mind for every design suggestion: anything that
   starts a transfer should be routable through a central scheduler/limiter later.
