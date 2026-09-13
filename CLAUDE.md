@@ -66,7 +66,9 @@ skipping.
 
 **Mistakes log.** `docs/go-lessons.md` (committed, public by choice) lists recurring mistakes and the idiomatic
 alternative for each. When Claude flags the same *kind* of issue a second time, it adds an
-entry, or bumps an existing one, and mentions this in the review. The author reviews the
+entry, or bumps an existing one, and mentions this in the review. Every entry links the most
+recent authoritative Go doc that explains the pattern (go.dev blog/docs, Effective Go, Code
+Review Comments, the Go FAQ); prefer the newest source over older ones that predate current Go. The author reviews the
 log from time to time; entries they've clearly absorbed can be marked as such.
 
 **Enforcement.** `.claude/settings.json` denies Claude file edits under `cmd/` and asks
