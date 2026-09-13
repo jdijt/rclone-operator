@@ -36,26 +36,26 @@ import (
 const testRevalidationInterval = 10 * time.Second
 
 type statusUpdateCase struct {
-	name              string
-	objectSpec        rcofrozenbitssev1alpha1.RCloneRemoteSpec
-	expectedResult    controllerruntime.Result
-	expectedCondition metav1.Condition
+	name          string
+	in            rcofrozenbitssev1alpha1.RCloneRemoteSpec
+	wantResult    controllerruntime.Result
+	wantCondition metav1.Condition
 }
 
 // statusUpdateCases run against both RCloneRemote and RCloneClusterRemote.
 var statusUpdateCases = []statusUpdateCase{
 	{
 		name: "Valid Record",
-		objectSpec: rcofrozenbitssev1alpha1.RCloneRemoteSpec{
+		in: rcofrozenbitssev1alpha1.RCloneRemoteSpec{
 			Type: "template",
 			Template: &rcofrozenbitssev1alpha1.TemplateBackend{
 				Template: "A valid template",
 				Inputs:   nil,
 			}},
-		expectedResult: controllerruntime.Result{
+		wantResult: controllerruntime.Result{
 			RequeueAfter: testRevalidationInterval,
 		},
-		expectedCondition: metav1.Condition{
+		wantCondition: metav1.Condition{
 			Type:   rcofrozenbitssev1alpha1.ReadyCondition,
 			Status: metav1.ConditionTrue,
 			Reason: rcofrozenbitssev1alpha1.ReasonValid,
@@ -63,15 +63,15 @@ var statusUpdateCases = []statusUpdateCase{
 	},
 	{
 		name: "Invalid Template",
-		objectSpec: rcofrozenbitssev1alpha1.RCloneRemoteSpec{
+		in: rcofrozenbitssev1alpha1.RCloneRemoteSpec{
 			Type: "template",
 			Template: &rcofrozenbitssev1alpha1.TemplateBackend{
 				Template: "With a {{ .field }} that has no input",
 				Inputs:   nil,
 			},
 		},
-		expectedResult: controllerruntime.Result{},
-		expectedCondition: metav1.Condition{
+		wantResult: controllerruntime.Result{},
+		wantCondition: metav1.Condition{
 			Type:   rcofrozenbitssev1alpha1.ReadyCondition,
 			Status: metav1.ConditionFalse,
 			Reason: rcofrozenbitssev1alpha1.ReasonInvalid,
@@ -85,12 +85,12 @@ var statusUpdateCases = []statusUpdateCase{
 func createAndReconcile(t *testing.T, g *WithT, scope reconcilerScope, spec rcofrozenbitssev1alpha1.RCloneRemoteSpec) rcofrozenbitssev1alpha1.RCloneRemoteInstance {
 	t.Helper()
 	obj := scope.newObject(t, g, spec)
-	g.Expect(k8sClient.Create(t.Context(), obj)).Should(Succeed())
+	g.Expect(k8sClient.Create(t.Context(), obj)).To(Succeed())
 
 	key := client.ObjectKeyFromObject(obj)
 	_, err := scope.reconciler.Reconcile(t.Context(), controllerruntime.Request{NamespacedName: key})
-	g.Expect(err).Should(Succeed())
-	g.Expect(k8sClient.Get(t.Context(), key, obj)).Should(Succeed())
+	g.Expect(err).To(Succeed())
+	g.Expect(k8sClient.Get(t.Context(), key, obj)).To(Succeed())
 	return obj
 }
 
@@ -101,7 +101,7 @@ type newTestObjectFunc func(t *testing.T, g *WithT, spec rcofrozenbitssev1alpha1
 // newTestRCloneRemote creates a unique namespace and returns an unsaved RCloneRemote in it.
 func newTestRCloneRemote(t *testing.T, g *WithT, spec rcofrozenbitssev1alpha1.RCloneRemoteSpec) rcofrozenbitssev1alpha1.RCloneRemoteInstance {
 	ns := &v1.Namespace{GenerateName: "rcloneremote-test-"}
-	g.Expect(k8sClient.Create(t.Context(), ns)).Should(Succeed())
+	g.Expect(k8sClient.Create(t.Context(), ns)).To(Succeed())
 	return &rcofrozenbitssev1alpha1.RCloneRemote{
 		Namespace: ns.Name,
 		Name:      "test-rcloneremote",
@@ -146,35 +146,32 @@ func reconcilerScopes() []reconcilerScope {
 
 func TestRCloneRemoteReconciler_StatusUpdate(t *testing.T) {
 	for _, scope := range reconcilerScopes() {
-		for _, test := range statusUpdateCases {
-			t.Run(scope.name+"/"+test.name, func(t *testing.T) {
-				var err error
+		for _, tt := range statusUpdateCases {
+			t.Run(scope.name+"/"+tt.name, func(t *testing.T) {
 				t.Parallel()
 				g := NewWithT(t)
 
-				obj := scope.newObject(t, g, test.objectSpec)
+				obj := scope.newObject(t, g, tt.in)
 
 				// ApiServer LastTransitionTime is whole seconds.
 				creationTime := time.Now().Truncate(time.Second)
 
-				err = k8sClient.Create(t.Context(), obj)
-				g.Expect(err).Should(Succeed())
+				g.Expect(k8sClient.Create(t.Context(), obj)).To(Succeed())
 
 				objectKey := client.ObjectKeyFromObject(obj)
 
 				result, err := scope.reconciler.Reconcile(t.Context(), controllerruntime.Request{NamespacedName: objectKey})
-				g.Expect(err).Should(Succeed())
-				g.Expect(result).Should(Equal(test.expectedResult))
+				g.Expect(err).To(Succeed())
+				g.Expect(result).To(Equal(tt.wantResult))
 
-				err = k8sClient.Get(t.Context(), objectKey, obj)
-				g.Expect(err).Should(Succeed())
+				g.Expect(k8sClient.Get(t.Context(), objectKey, obj)).To(Succeed())
 
 				status := obj.GetRCloneRemoteStatus()
 				g.Expect(status.Conditions).To(HaveLen(1))
 				cond := status.Conditions[0]
-				g.Expect(cond.Type).To(Equal(test.expectedCondition.Type))
-				g.Expect(cond.Status).To(Equal(test.expectedCondition.Status))
-				g.Expect(cond.Reason).To(Equal(test.expectedCondition.Reason))
+				g.Expect(cond.Type).To(Equal(tt.wantCondition.Type))
+				g.Expect(cond.Status).To(Equal(tt.wantCondition.Status))
+				g.Expect(cond.Reason).To(Equal(tt.wantCondition.Reason))
 				// Should have transitioned after the create && should apply to current generation of object.
 				g.Expect(cond.LastTransitionTime.Time).To(BeTemporally(">=", creationTime))
 				g.Expect(cond.ObservedGeneration).To(BeNumerically("==", obj.GetGeneration()))
@@ -196,8 +193,8 @@ func TestRCloneRemoteReconciler_NotFound(t *testing.T) {
 			}
 
 			result, err := scope.reconciler.Reconcile(t.Context(), controllerruntime.Request{NamespacedName: key})
-			g.Expect(err).Should(Succeed())
-			g.Expect(result).Should(Equal(controllerruntime.Result{}))
+			g.Expect(err).To(Succeed())
+			g.Expect(result).To(Equal(controllerruntime.Result{}))
 		})
 	}
 }
@@ -206,21 +203,21 @@ func TestRCloneRemoteReconciler_NotFound(t *testing.T) {
 // AI-generated
 func TestRCloneRemoteReconciler_Idempotent(t *testing.T) {
 	for _, scope := range reconcilerScopes() {
-		for _, test := range statusUpdateCases {
-			t.Run(scope.name+"/"+test.name, func(t *testing.T) {
+		for _, tt := range statusUpdateCases {
+			t.Run(scope.name+"/"+tt.name, func(t *testing.T) {
 				t.Parallel()
 				g := NewWithT(t)
 
-				obj := createAndReconcile(t, g, scope, test.objectSpec)
+				obj := createAndReconcile(t, g, scope, tt.in)
 				key := client.ObjectKeyFromObject(obj)
 				firstVersion := obj.GetResourceVersion()
 				firstCond := obj.GetRCloneRemoteStatus().Conditions[0]
 
 				result, err := scope.reconciler.Reconcile(t.Context(), controllerruntime.Request{NamespacedName: key})
-				g.Expect(err).Should(Succeed())
-				g.Expect(result).Should(Equal(test.expectedResult))
+				g.Expect(err).To(Succeed())
+				g.Expect(result).To(Equal(tt.wantResult))
 
-				g.Expect(k8sClient.Get(t.Context(), key, obj)).Should(Succeed())
+				g.Expect(k8sClient.Get(t.Context(), key, obj)).To(Succeed())
 				g.Expect(obj.GetResourceVersion()).To(Equal(firstVersion), "second reconcile wrote status")
 				conds := obj.GetRCloneRemoteStatus().Conditions
 				g.Expect(conds).To(HaveLen(1))
@@ -239,7 +236,7 @@ func TestRCloneRemoteReconciler_SpecUpdate(t *testing.T) {
 	}
 	invalidSpec := rcofrozenbitssev1alpha1.RCloneRemoteSpec{
 		Type:     "template",
-		Template: &rcofrozenbitssev1alpha1.TemplateBackend{Template: "With a {{ field }} that has no input"},
+		Template: &rcofrozenbitssev1alpha1.TemplateBackend{Template: "With a {{ .field }} that has no input"},
 	}
 
 	for _, scope := range reconcilerScopes() {
@@ -252,15 +249,15 @@ func TestRCloneRemoteReconciler_SpecUpdate(t *testing.T) {
 			g.Expect(obj.GetRCloneRemoteStatus().Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 
 			*obj.GetRCloneRemoteSpec() = invalidSpec
-			g.Expect(k8sClient.Update(t.Context(), obj)).Should(Succeed())
+			g.Expect(k8sClient.Update(t.Context(), obj)).To(Succeed())
 			// Guards the premise of this test: a spec change must bump the generation.
 			g.Expect(obj.GetGeneration()).To(BeNumerically("==", 2))
 
 			result, err := scope.reconciler.Reconcile(t.Context(), controllerruntime.Request{NamespacedName: key})
-			g.Expect(err).Should(Succeed())
-			g.Expect(result).Should(Equal(controllerruntime.Result{}))
+			g.Expect(err).To(Succeed())
+			g.Expect(result).To(Equal(controllerruntime.Result{}))
 
-			g.Expect(k8sClient.Get(t.Context(), key, obj)).Should(Succeed())
+			g.Expect(k8sClient.Get(t.Context(), key, obj)).To(Succeed())
 			conds := obj.GetRCloneRemoteStatus().Conditions
 			g.Expect(conds).To(HaveLen(1))
 			g.Expect(conds[0].Status).To(Equal(metav1.ConditionFalse))
