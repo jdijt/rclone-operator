@@ -370,9 +370,9 @@ func TestRCloneRemoteAdmission(t *testing.T) {
 	}
 
 	// Ensure operatorNs exists
-	if err := client.IgnoreAlreadyExists(k8sClient.Create(t.Context(), &v1.Namespace{Name: operatorNs})); err != nil {
-		t.Fatalf("Failed to create controller namespace: %v", err)
-	}
+	NewWithT(t).
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(t.Context(), &v1.Namespace{Name: operatorNs}))).
+		To(Succeed())
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
