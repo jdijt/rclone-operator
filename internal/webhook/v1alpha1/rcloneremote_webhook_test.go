@@ -17,10 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	rcofrozenbitssev1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 	. "github.com/onsi/gomega"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -392,6 +395,134 @@ func TestRCloneRemoteAdmission(t *testing.T) {
 			} else {
 				g.Expect(err).To(MatchError(ContainSubstring(tt.wantErr)))
 			}
+		})
+	}
+}
+
+// AI-generated
+// TestRCloneRemoteUpdateAdmission makes a valid object invalid (for the webhook only, CEL
+// still passes) through an update, proving each webhook is registered for UPDATE.
+func TestRCloneRemoteUpdateAdmission(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      rcofrozenbitssev1alpha1.RCloneRemoteInstance
+		wantErr string
+	}{
+		{
+			name: "Webhook rejects namespaced update to undeclared input",
+			in: &rcofrozenbitssev1alpha1.RCloneRemote{
+				Name: "remote",
+				Spec: rcofrozenbitssev1alpha1.RCloneRemoteSpec{
+					Type:     rcofrozenbitssev1alpha1.RCBackendTypeTemplate,
+					Template: &rcofrozenbitssev1alpha1.TemplateBackend{Template: "valid"},
+				},
+			},
+			wantErr: `admission webhook "vrcloneremote-v1alpha1.kb.io" denied the request`,
+		},
+		{
+			name: "Webhook rejects cluster update to undeclared input",
+			in: &rcofrozenbitssev1alpha1.RCloneClusterRemote{
+				GenerateName: "remote-",
+				Spec: rcofrozenbitssev1alpha1.RCloneRemoteSpec{
+					Type:     rcofrozenbitssev1alpha1.RCBackendTypeTemplate,
+					Template: &rcofrozenbitssev1alpha1.TemplateBackend{Template: "valid"},
+				},
+			},
+			wantErr: `admission webhook "vrcloneclusterremote-v1alpha1.kb.io" denied the request`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewWithT(t)
+			if obj, isNamespaced := tt.in.(*rcofrozenbitssev1alpha1.RCloneRemote); isNamespaced {
+				ns := v1.Namespace{GenerateName: "webhook-test-"}
+				g.Expect(k8sClient.Create(t.Context(), &ns)).To(Succeed())
+				obj.Namespace = ns.Name
+			}
+			g.Expect(k8sClient.Create(t.Context(), tt.in)).To(Succeed())
+
+			tt.in.GetRCloneRemoteSpec().Template.Template = "{{ .missing }}"
+			err := k8sClient.Update(t.Context(), tt.in)
+
+			g.Expect(err).To(MatchError(ContainSubstring(tt.wantErr)))
+		})
+	}
+}
+
+// AI-generated
+// TestRCloneRemoteDeleteAdmission stores objects the webhooks would reject (with the webhook
+// configuration removed), restores the webhooks, then checks the objects can still be deleted.
+// This is the upgrade case: validation got stricter, and existing objects must stay deletable.
+//
+// It removes the cluster-wide webhook configuration, so it must not call t.Parallel: top-level
+// tests run sequentially, and other tests' parallel subtests finish before their parent returns.
+func TestRCloneRemoteDeleteAdmission(t *testing.T) {
+	const webhookTimeout = 10 * time.Second
+	g := NewWithT(t)
+	ctx := t.Context()
+
+	ns := v1.Namespace{GenerateName: "webhook-test-"}
+	g.Expect(k8sClient.Create(ctx, &ns)).To(Succeed())
+
+	invalidSpec := func() rcofrozenbitssev1alpha1.RCloneRemoteSpec {
+		return rcofrozenbitssev1alpha1.RCloneRemoteSpec{
+			Type:     rcofrozenbitssev1alpha1.RCBackendTypeTemplate,
+			Template: &rcofrozenbitssev1alpha1.TemplateBackend{Template: "{{ .missing }}"},
+		}
+	}
+	tests := []struct {
+		name string
+		in   rcofrozenbitssev1alpha1.RCloneRemoteInstance
+	}{
+		{
+			name: "Namespaced delete of webhook-invalid object succeeds",
+			in:   &rcofrozenbitssev1alpha1.RCloneRemote{Name: "remote", Spec: invalidSpec()},
+		},
+		{
+			name: "Cluster delete of webhook-invalid object succeeds",
+			in:   &rcofrozenbitssev1alpha1.RCloneClusterRemote{GenerateName: "remote-", Spec: invalidSpec()},
+		},
+	}
+
+	var webhooks admissionregistrationv1.ValidatingWebhookConfiguration
+	g.Expect(k8sClient.Get(ctx, client.ObjectKey{Name: "validating-webhook-configuration"}, &webhooks)).
+		To(Succeed())
+	saved := webhooks.DeepCopy()
+	saved.ResourceVersion = ""
+	saved.UID = ""
+	restore := func(ctx context.Context) error {
+		return client.IgnoreAlreadyExists(k8sClient.Create(ctx, saved.DeepCopy()))
+	}
+	// t.Context is already canceled when cleanups run.
+	t.Cleanup(func() { _ = restore(context.Background()) })
+
+	g.Expect(k8sClient.Delete(ctx, &webhooks)).To(Succeed())
+
+	// Insert without webhook validation running:
+	for _, tt := range tests {
+		if obj, isNamespaced := tt.in.(*rcofrozenbitssev1alpha1.RCloneRemote); isNamespaced {
+			obj.Namespace = ns.Name
+		}
+		g.Eventually(func() error { return k8sClient.Create(ctx, tt.in) }).
+			WithTimeout(webhookTimeout).Should(Succeed())
+	}
+
+	// Restore webhook.
+	g.Expect(restore(ctx)).To(Succeed())
+	probe := func() error {
+		return k8sClient.Create(ctx,
+			&rcofrozenbitssev1alpha1.RCloneClusterRemote{GenerateName: "probe-", Spec: invalidSpec()},
+			client.DryRunAll)
+	}
+	g.Eventually(probe).WithTimeout(webhookTimeout).
+		Should(MatchError(ContainSubstring("denied the request")))
+
+	// Check if we can still delete the invalid specs.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			NewWithT(t).Expect(k8sClient.Delete(t.Context(), tt.in)).To(Succeed())
 		})
 	}
 }
