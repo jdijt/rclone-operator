@@ -2,14 +2,15 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   static-analysis:
-    permissions:
-      contents: read
     name: Static analysis
     runs-on: ubuntu-latest
     steps:
@@ -30,11 +31,10 @@ jobs:
         run: make lint
 
       - name: Check go.mod and go.sum are tidy
+        if: ${{ !cancelled() }}
         run: go mod tidy -diff
 
   test:
-    permissions:
-      contents: read
     name: Tests
     runs-on: ubuntu-latest
     steps:
@@ -52,8 +52,6 @@ jobs:
         run: make test
 
   test-e2e:
-    permissions:
-      contents: read
     name: E2E Tests
     runs-on: ubuntu-latest
     steps:
