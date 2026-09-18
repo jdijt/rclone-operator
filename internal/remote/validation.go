@@ -17,13 +17,47 @@ limitations under the License.
 package remote
 
 import (
+	"context"
 	"fmt"
 	"text/template"
 	"text/template/parse"
 
 	rcov1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func ValidateReferences(ctx *context.Context, client client.Client, ns string, spec rcov1alpha1.RCloneRemoteSpec) field.ErrorList {
+	var secretRefs []*rcov1alpha1.SecretKeyRef
+	switch spec.Type {
+	case rcov1alpha1.RCBackendTypeCrypt:
+		b := spec.Crypt
+		secretRefs = append(secretRefs, &b.PasswordRef)
+		if spec.Crypt.SaltRef != nil {
+			secretRefs = append(secretRefs, b.SaltRef)
+		}
+	case rcov1alpha1.RCBackendTypeS3:
+		b := spec.S3
+		secretRefs = append(secretRefs, &b.AccessKeyIDRef, &b.SecretAccessKeyRef)
+	case rcov1alpha1.RCBackendTypeSFTP:
+		b := spec.SFTP
+		if b.PasswordRef != nil {
+			secretRefs = append(secretRefs, b.PasswordRef)
+		}
+		if b.PrivateKeyPassphraseRef != nil {
+			secretRefs = append(secretRefs, b.PrivateKeyPassphraseRef)
+		}
+		if b.PrivateKeyRef != nil {
+			secretRefs = append(secretRefs, b.PrivateKeyRef)
+		}
+	case rcov1alpha1.RCBackendTypeTemplate:
+		b := spec.Template
+		for _, ref := range b.Inputs {
+			secretRefs = append(secretRefs, &ref)
+		}
+	}
+
+}
 
 // ValidateRCloneRemoteSpec statically validates an rclone remote,
 // where this is not already handled by the APIServer via CEL rules.

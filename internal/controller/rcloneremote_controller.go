@@ -73,6 +73,8 @@ func (r *RCloneRemoteReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, r.setCondition(ctx, obj, metav1.ConditionFalse, rcov1alpha1.ReasonInvalid, errs.ToAggregate().Error())
 	}
 
+	
+
 	return ctrl.Result{RequeueAfter: r.RevalidationInterval}, r.setCondition(ctx, obj, metav1.ConditionTrue, rcov1alpha1.ReasonValid, "")
 }
 
