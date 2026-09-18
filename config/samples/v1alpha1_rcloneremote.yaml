@@ -1,3 +1,5 @@
+# An sftp remote, as used for the off-site storage box.
+# The referenced Secret is looked up in this RCloneRemote's own namespace.
 apiVersion: rco.frozenbits.se/v1alpha1
 kind: RCloneRemote
 metadata:
@@ -6,4 +8,12 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: rcloneremote-sample
 spec:
-  # TODO(user): Add fields here
+  type: sftp
+  sftp:
+    host: sftp.example.com
+    port: 22
+    user: backup
+    privateKeyRef:
+      name: rcloneremote-sample-credentials
+      key: privateKey
+    connections: 4

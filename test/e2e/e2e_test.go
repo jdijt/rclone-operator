@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -318,16 +319,63 @@ var _ = Describe("Manager", Ordered, func() {
 		})
 
 		// +kubebuilder:scaffold:e2e-webhooks-checks
+	})
 
-		// TODO: Customize the e2e test suite with scenarios specific to your project.
-		// Consider applying sample/CR(s) and check their status and/or verifying
-		// the reconciliation by using the metrics, i.e.:
-		// metricsOutput, err := getMetricsOutput()
-		// Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl pod")
-		// Expect(metricsOutput).To(ContainSubstring(
-		//    fmt.Sprintf(`controller_runtime_reconcile_total{controller="%s",result="success"} 1`,
-		//    strings.ToLower(<Kind>),
-		// ))
+	// AI-generated
+	//
+	// Runs after the webhook readiness checks above: the Describe is Ordered, so by the
+	// time these specs apply a CR the validating webhook is serving. The manifests are
+	// the sample CRs from config/samples, so the samples stay valid as the API evolves.
+	Context("Remote reconciliation", func() {
+		It("should mark the sample RCloneRemote ready", func() {
+			const name = "rcloneremote-sample"
+
+			By("applying the sample RCloneRemote")
+			cmd := exec.Command("kubectl", "apply", "-n", namespace,
+				"-f", "config/samples/v1alpha1_rcloneremote.yaml")
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to apply the sample RCloneRemote")
+			DeferCleanup(func() {
+				cmd := exec.Command("kubectl", "delete", "-n", namespace, "--ignore-not-found",
+					"-f", "config/samples/v1alpha1_rcloneremote.yaml")
+				_, _ = utils.Run(cmd)
+			})
+
+			By("waiting for the controller to set the Ready condition")
+			verifyRemoteReady := func(g Gomega) {
+				cond, err := getReadyCondition("rcloneremote", name, "-n", namespace)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(cond.Status).To(Equal("True"), "RCloneRemote not ready: %s", cond.Message)
+				g.Expect(cond.Reason).To(Equal("Valid"))
+				g.Expect(cond.ObservedGeneration).To(BeNumerically("==", 1))
+			}
+			Eventually(verifyRemoteReady).Should(Succeed())
+		})
+
+		It("should mark the sample RCloneClusterRemote ready", func() {
+			const name = "rcloneclusterremote-sample"
+
+			By("applying the sample RCloneClusterRemote")
+			cmd := exec.Command("kubectl", "apply",
+				"-f", "config/samples/v1alpha1_rcloneclusterremote.yaml")
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to apply the sample RCloneClusterRemote")
+			DeferCleanup(func() {
+				cmd := exec.Command("kubectl", "delete", "--ignore-not-found",
+					"-f", "config/samples/v1alpha1_rcloneclusterremote.yaml")
+				_, _ = utils.Run(cmd)
+			})
+
+			By("waiting for the controller to set the Ready condition")
+			verifyClusterRemoteReady := func(g Gomega) {
+				cond, err := getReadyCondition("rcloneclusterremote", name)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(cond.Status).To(Equal("True"), "RCloneClusterRemote not ready: %s", cond.Message)
+				g.Expect(cond.Reason).To(Equal("Valid"))
+				g.Expect(cond.ObservedGeneration).To(BeNumerically("==", 1))
+			}
+			Eventually(verifyClusterRemoteReady).Should(Succeed())
+		})
 	})
 })
 
@@ -385,4 +433,30 @@ type tokenRequest struct {
 	Status struct {
 		Token string `json:"token"`
 	} `json:"status"`
+}
+
+// readyCondition holds the fields of the "Ready" metav1.Condition the e2e specs assert on.
+// AI-generated
+type readyCondition struct {
+	Status             string `json:"status"`
+	Reason             string `json:"reason"`
+	Message            string `json:"message"`
+	ObservedGeneration int64  `json:"observedGeneration"`
+}
+
+// getReadyCondition reads the "Ready" condition of the object addressed by the given
+// "kubectl get" arguments. It returns an error while the condition is still absent.
+// AI-generated
+func getReadyCondition(getArgs ...string) (readyCondition, error) {
+	var cond readyCondition
+	args := append([]string{"get"}, getArgs...)
+	args = append(args, "-o", `jsonpath={.status.conditions[?(@.type=="Ready")]}`)
+	output, err := utils.Run(exec.Command("kubectl", args...))
+	if err != nil {
+		return cond, err
+	}
+	if output == "" {
+		return cond, fmt.Errorf("no Ready condition on %s yet", strings.Join(getArgs, " "))
+	}
+	return cond, json.Unmarshal([]byte(output), &cond)
 }
