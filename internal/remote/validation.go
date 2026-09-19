@@ -17,17 +17,15 @@ limitations under the License.
 package remote
 
 import (
-	"context"
 	"fmt"
 	"text/template"
 	"text/template/parse"
 
 	rcov1alpha1 "github.com/jdijt/rclone-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func ValidateReferences(ctx *context.Context, client client.Client, ns string, spec rcov1alpha1.RCloneRemoteSpec) field.ErrorList {
+func ExtractSecretRefs(spec rcov1alpha1.RCloneRemoteSpec) []*rcov1alpha1.SecretKeyRef {
 	var secretRefs []*rcov1alpha1.SecretKeyRef
 	switch spec.Type {
 	case rcov1alpha1.RCBackendTypeCrypt:
@@ -56,7 +54,7 @@ func ValidateReferences(ctx *context.Context, client client.Client, ns string, s
 			secretRefs = append(secretRefs, &ref)
 		}
 	}
-
+	return secretRefs
 }
 
 // ValidateRCloneRemoteSpec statically validates an rclone remote,
