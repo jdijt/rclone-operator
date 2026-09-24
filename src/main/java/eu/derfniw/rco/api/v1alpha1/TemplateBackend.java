@@ -27,7 +27,7 @@ import java.util.Map;
  * values.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TemplateBackend {
+public final class TemplateBackend implements Backend {
 
     /** The rclone connection string with {@code ${name}} placeholders for inputs. */
     @Required

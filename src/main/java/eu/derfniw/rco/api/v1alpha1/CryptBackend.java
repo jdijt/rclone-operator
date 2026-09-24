@@ -22,7 +22,7 @@ import io.fabric8.generator.annotation.Required;
 
 /** Maps to rclone's crypt backend, which encrypts another remote. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class CryptBackend {
+public final class CryptBackend implements Backend {
 
     /** The rclone crypt filename_encryption mode. */
     public enum FilenameEncryption {

@@ -58,7 +58,10 @@ abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpe
         }
         boolean changed = Conditions.set(resource.getStatus().getConditions(), condition);
 
-        UpdateControl<R> control = changed ? UpdateControl.patchStatus(resource) : UpdateControl.noUpdate();
-        return valid ? control.rescheduleAfter(config.revalidationInterval()) : control;
+        if (changed) {
+            return UpdateControl.patchStatus(resource);
+        } else {
+            return UpdateControl.noUpdate();
+        }
     }
 }

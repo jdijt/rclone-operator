@@ -28,9 +28,11 @@ Package root `eu.derfniw.rco`:
 - `api.v1alpha1` — CRD model classes, group `rco.frozenbits.se`. Kinds carry an `RClone` prefix. CRDs are generated
   at build time by the fabric8 CRD generator from the annotations (`@ValidationRule`, `@Required`, `@Size`,
   `@Min`/`@Max`, `@Default`, `@AdditionalPrinterColumn`) into `target/kubernetes/`.
-- `remote` — `RemoteSpecValidator`: checks CRD markers can't express. No dependency on the Kubernetes client.
+- `remote` — `RemoteSpecValidator` (CDI bean, injected into the reconcilers and the webhook): checks CRD markers
+  can't express. No dependency on the Kubernetes client.
 - `controller` — reconcilers. `AbstractRemoteReconciler` holds the logic shared by both remote kinds.
-- `webhook` — validating admission webhooks, a plain JAX-RS resource on fabric8's `AdmissionReview` model.
+- `webhook` — validating admission webhooks, a plain JAX-RS resource on fabric8's `AdmissionReview` model, served
+  under `/webhooks/validate/<plural>`.
 - `src/main/kubernetes/kubernetes.yml` — hand-written manifests merged into the generated ones (webhook
   configuration, cert-manager Issuer/Certificate).
 - `samples/` — example CRs.

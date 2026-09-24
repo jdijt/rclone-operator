@@ -17,20 +17,24 @@ package eu.derfniw.rco.controller;
 
 import eu.derfniw.rco.OperatorConfig;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
+import eu.derfniw.rco.remote.RemoteSpecValidator;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
+import io.javaoperatorsdk.operator.api.reconciler.MaxReconciliationInterval;
 import io.quarkiverse.operatorsdk.annotations.AdditionalRBACRules;
 import io.quarkiverse.operatorsdk.annotations.RBACRule;
 import jakarta.inject.Singleton;
+import java.util.concurrent.TimeUnit;
 
 @Singleton
-@ControllerConfiguration(name = "rcloneremote")
+@ControllerConfiguration(
+        name = "rcloneremote",
+        maxReconciliationInterval = @MaxReconciliationInterval(interval = 1, timeUnit = TimeUnit.HOURS))
 @AdditionalRBACRules({
     @RBACRule(apiGroups = "", resources = "secrets", verbs = "get"),
-    @RBACRule(apiGroups = RCloneRemote.GROUP, resources = "rcloneremotes", verbs = {"get","watch","list"})
 })
 public class RCloneRemoteReconciler extends AbstractRemoteReconciler<RCloneRemote> {
 
-    public RCloneRemoteReconciler(OperatorConfig config) {
-        super(config);
+    public RCloneRemoteReconciler(OperatorConfig config, RemoteSpecValidator validator) {
+        super(config, validator);
     }
 }

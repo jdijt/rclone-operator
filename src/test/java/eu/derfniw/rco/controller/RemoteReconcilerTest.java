@@ -23,6 +23,7 @@ import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
 import eu.derfniw.rco.api.v1alpha1.TemplateBackend;
+import eu.derfniw.rco.remote.RemoteSpecValidator;
 import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import java.time.Duration;
@@ -37,17 +38,19 @@ class RemoteReconcilerTest {
 
     private static final Duration INTERVAL = Duration.ofSeconds(10);
 
-    private final RCloneRemoteReconciler reconciler = new RCloneRemoteReconciler(new OperatorConfig() {
-        @Override
-        public String operatorNamespace() {
-            return "rclone-operator";
-        }
+    private final RCloneRemoteReconciler reconciler = new RCloneRemoteReconciler(
+            new OperatorConfig() {
+                @Override
+                public String operatorNamespace() {
+                    return "rclone-operator";
+                }
 
-        @Override
-        public Duration revalidationInterval() {
-            return INTERVAL;
-        }
-    });
+                @Override
+                public Duration revalidationInterval() {
+                    return INTERVAL;
+                }
+            },
+            new RemoteSpecValidator());
 
     @Test
     void validRemoteBecomesReadyAndIsRevalidated() {

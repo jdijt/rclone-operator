@@ -92,12 +92,12 @@ public class KubeApiServerResource implements QuarkusTestResourceLifecycleManage
                                 webhook(
                                         "vrcloneremote.rco.frozenbits.se",
                                         "rcloneremotes",
-                                        baseUrl + "validate-rco-frozenbits-se-v1alpha1-rcloneremote",
+                                        baseUrl + "webhooks/validate/rcloneremotes",
                                         caBundle),
                                 webhook(
                                         "vrcloneclusterremote.rco.frozenbits.se",
                                         "rcloneclusterremotes",
-                                        baseUrl + "validate-rco-frozenbits-se-v1alpha1-rcloneclusterremote",
+                                        baseUrl + "webhooks/validate/rcloneclusterremotes",
                                         caBundle))
                         .build();
                 try (var client =

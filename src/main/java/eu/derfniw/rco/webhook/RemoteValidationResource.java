@@ -39,23 +39,25 @@ import java.util.stream.Collectors;
  * Validating admission webhooks for RCloneRemote and RCloneClusterRemote, registered for CREATE and UPDATE. They run
  * the checks that the CRD schema and its CEL rules cannot express.
  */
-@Path("/")
+@Path("/webhooks/validate")
 public class RemoteValidationResource {
 
     private final KubernetesSerialization serialization;
+    private final RemoteSpecValidator validator;
 
-    public RemoteValidationResource(KubernetesClient client) {
+    public RemoteValidationResource(KubernetesClient client, RemoteSpecValidator validator) {
         this.serialization = client.getKubernetesSerialization();
+        this.validator = validator;
     }
 
     @POST
-    @Path("validate-rco-frozenbits-se-v1alpha1-rcloneremote")
+    @Path("rcloneremotes")
     public AdmissionReview validateRemote(AdmissionReview review) {
         return validate(review, RCloneRemote.class);
     }
 
     @POST
-    @Path("validate-rco-frozenbits-se-v1alpha1-rcloneclusterremote")
+    @Path("rcloneclusterremotes")
     public AdmissionReview validateClusterRemote(AdmissionReview review) {
         return validate(review, RCloneClusterRemote.class);
     }
@@ -64,7 +66,7 @@ public class RemoteValidationResource {
             AdmissionReview review, Class<? extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>> type) {
         var request = review.getRequest();
         var remote = serialization.convertValue(request.getObject(), type);
-        var errors = RemoteSpecValidator.validate(remote.getSpec());
+        var errors = validator.validate(remote.getSpec());
 
         var response = errors.isEmpty()
                 ? new AdmissionResponseBuilder().withAllowed(true)

@@ -17,14 +17,19 @@ package eu.derfniw.rco.controller;
 
 import eu.derfniw.rco.OperatorConfig;
 import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
+import eu.derfniw.rco.remote.RemoteSpecValidator;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
+import io.javaoperatorsdk.operator.api.reconciler.MaxReconciliationInterval;
 import jakarta.inject.Singleton;
+import java.util.concurrent.TimeUnit;
 
 @Singleton
-@ControllerConfiguration(name = "rcloneclusterremote")
+@ControllerConfiguration(
+        name = "rcloneclusterremote",
+        maxReconciliationInterval = @MaxReconciliationInterval(interval = 1, timeUnit = TimeUnit.HOURS))
 public class RCloneClusterRemoteReconciler extends AbstractRemoteReconciler<RCloneClusterRemote> {
 
-    public RCloneClusterRemoteReconciler(OperatorConfig config) {
-        super(config);
+    public RCloneClusterRemoteReconciler(OperatorConfig config, RemoteSpecValidator validator) {
+        super(config, validator);
     }
 }

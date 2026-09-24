@@ -32,7 +32,7 @@ import io.fabric8.generator.annotation.ValidationRule;
         value = "!has(self.endpoint) || (isURL(self.endpoint) && url(self.endpoint).getScheme() in ['http', 'https'])",
         message = "endpoint must be a valid http/https URL")
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class S3Backend {
+public final class S3Backend implements Backend {
 
     /** The rclone s3 provider name, e.g. AWS, Minio, Ceph, Wasabi, Other (rclone option: provider). */
     @Required

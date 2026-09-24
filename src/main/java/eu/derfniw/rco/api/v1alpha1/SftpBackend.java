@@ -31,7 +31,7 @@ import io.fabric8.generator.annotation.ValidationRule;
         value = "has(self.privateKeyPassphraseRef) ? has(self.privateKeyRef) : true",
         message = "privateKeyPassphrase supplied but no private key used")
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SftpBackend {
+public final class SftpBackend implements Backend {
 
     /** Host to connect to (rclone option: host). */
     @Required

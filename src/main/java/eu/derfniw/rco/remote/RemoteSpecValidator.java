@@ -16,50 +16,46 @@
 package eu.derfniw.rco.remote;
 
 import eu.derfniw.rco.api.v1alpha1.BackendType;
+import eu.derfniw.rco.api.v1alpha1.CryptBackend;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
+import eu.derfniw.rco.api.v1alpha1.S3Backend;
+import eu.derfniw.rco.api.v1alpha1.SftpBackend;
 import eu.derfniw.rco.api.v1alpha1.TemplateBackend;
+import jakarta.enterprise.context.ApplicationScoped;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** Statically validates an rclone remote spec, where this is not already handled by the API server via CEL rules. */
-public final class RemoteSpecValidator {
+/** Validates an rclone remote spec, where this is not already handled by the API server via CEL rules. */
+@ApplicationScoped
+public class RemoteSpecValidator {
 
     private static final String SPEC = "spec";
-
-    private RemoteSpecValidator() {}
 
     /**
      * Validates the spec. Only the variant selected by {@code type} is validated: the other variants are ignored
      * (and CEL rules prevent them from being set in the first place).
      */
-    public static List<FieldError> validate(RCloneRemoteSpec spec) {
+    public List<FieldError> validate(RCloneRemoteSpec spec) {
         var type = spec.getType();
         if (type == null) {
             return List.of(FieldError.notSupported(SPEC + ".type", null, "supported values: " + supportedTypes()));
         }
 
-        var path = SPEC + "." + type.fieldName();
-        Object variant =
-                switch (type) {
-                    case SFTP -> spec.getSftp();
-                    case S3 -> spec.getS3();
-                    case CRYPT -> spec.getCrypt();
-                    case TEMPLATE -> spec.getTemplate();
-                };
-        if (variant == null) {
-            return List.of(FieldError.required(path, "must be specified when type is " + type.fieldName()));
-        }
-        if (type == BackendType.TEMPLATE) {
-            return validateTemplateBackend(spec.getTemplate(), path);
-        }
-        return List.of();
+        var path = SPEC + "." + type.value();
+        return switch (spec.selectedBackend()) {
+            case null -> List.of(FieldError.required(path, "must be specified when type is " + type.value()));
+            case TemplateBackend template -> validateTemplateBackend(template, path);
+            case SftpBackend ignored -> List.of();
+            case S3Backend ignored -> List.of();
+            case CryptBackend ignored -> List.of();
+        };
     }
 
     /** Validates that the template is well-formed and only references declared inputs. */
-    static List<FieldError> validateTemplateBackend(TemplateBackend backend, String path) {
+    List<FieldError> validateTemplateBackend(TemplateBackend backend, String path) {
         var field = path + ".template";
         var template =
                 backend.getTemplate() == null ? "" : backend.getTemplate().strip();
@@ -84,6 +80,6 @@ public final class RemoteSpecValidator {
     }
 
     private static String supportedTypes() {
-        return Arrays.stream(BackendType.values()).map(BackendType::fieldName).collect(Collectors.joining(", "));
+        return Arrays.stream(BackendType.values()).map(BackendType::value).collect(Collectors.joining(", "));
     }
 }

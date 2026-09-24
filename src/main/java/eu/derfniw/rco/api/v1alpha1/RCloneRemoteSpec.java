@@ -94,4 +94,17 @@ public class RCloneRemoteSpec {
     public void setTemplate(TemplateBackend template) {
         this.template = template;
     }
+
+    /** The backend field selected by {@code type}, or {@code null} if the type or that field is unset. */
+    public Backend selectedBackend() {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case SFTP -> sftp;
+            case S3 -> s3;
+            case CRYPT -> crypt;
+            case TEMPLATE -> template;
+        };
+    }
 }

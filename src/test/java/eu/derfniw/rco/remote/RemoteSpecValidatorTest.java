@@ -38,6 +38,8 @@ class RemoteSpecValidatorTest {
     private static final String TEMPLATE_FIELD = "spec.template.template";
     private static final Map<String, SecretKeyRef> USED_INPUT = Map.of("used", new SecretKeyRef("completely", "fake"));
 
+    private final RemoteSpecValidator validator = new RemoteSpecValidator();
+
     /** Expected error: compared on field and type, and the detail must contain {@code detailSubstring}. */
     record Expected(String field, FieldError.Type type, String detailSubstring) {}
 
@@ -118,7 +120,7 @@ class RemoteSpecValidatorTest {
     @ParameterizedTest
     @MethodSource("templateCases")
     void validateTemplateBackend(TemplateBackend in, List<Expected> expected) {
-        assertMatches(RemoteSpecValidator.validateTemplateBackend(in, "spec.template"), expected);
+        assertMatches(validator.validateTemplateBackend(in, "spec.template"), expected);
     }
 
     static Stream<Arguments> specCases() {
@@ -165,7 +167,7 @@ class RemoteSpecValidatorTest {
     @ParameterizedTest
     @MethodSource("specCases")
     void validate(RCloneRemoteSpec in, List<Expected> expected) {
-        assertMatches(RemoteSpecValidator.validate(in), expected);
+        assertMatches(validator.validate(in), expected);
     }
 
     private static RCloneRemoteSpec spec(BackendType type) {

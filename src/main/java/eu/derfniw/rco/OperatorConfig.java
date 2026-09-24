@@ -25,7 +25,4 @@ public interface OperatorConfig {
     /** Namespace the operator runs in. Secrets of cluster-scoped remotes are resolved here. */
     String operatorNamespace();
 
-    /** Interval at which valid remotes are re-validated. */
-    @WithDefault("5m")
-    Duration revalidationInterval();
 }

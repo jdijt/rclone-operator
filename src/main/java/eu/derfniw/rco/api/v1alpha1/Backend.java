@@ -15,24 +15,5 @@
  */
 package eu.derfniw.rco.api.v1alpha1;
 
-import com.fasterxml.jackson.annotation.JsonValue;
-
-/** The type of rclone backend a remote uses. Values mirror rclone's backend names. */
-public enum BackendType {
-    SFTP("sftp"),
-    S3("s3"),
-    CRYPT("crypt"),
-    TEMPLATE("template");
-
-    private final String value;
-
-    BackendType(String value) {
-        this.value = value;
-    }
-
-    /** The serialized value, which is also the field name of this backend's variant in {@link RCloneRemoteSpec}. */
-    @JsonValue
-    public String value() {
-        return value;
-    }
-}
+/** One variant of the {@link RCloneRemoteSpec} union. */
+public sealed interface Backend permits SftpBackend, S3Backend, CryptBackend, TemplateBackend {}

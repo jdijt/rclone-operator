@@ -70,11 +70,40 @@ class RemoteAdmissionTest {
     @Inject
     KubernetesClient client;
 
-    static Stream<Arguments> createCases() {
+    static Stream<Arguments> acceptedCases() {
         return Stream.of(
-                argumentSet("valid namespaced remote", namespaced(template("valid")), null),
-                argumentSet("valid cluster remote", cluster(template("valid")), null),
+                argumentSet("namespaced template", namespaced(template("valid"))),
+                argumentSet("cluster template", cluster(template("valid"))),
+                argumentSet(
+                        "template with declared input",
+                        namespaced(templateWithInputs(
+                                ":webdav,pass=${password}:", Map.of("password", ref("webdav", "password"))))),
+                argumentSet("sftp with password", namespaced(sftp(s -> s.setPasswordRef(ref("sftp", "password"))))),
+                argumentSet("sftp with private key and passphrase", namespaced(sftp(s -> {
+                    s.setPrivateKeyRef(ref("sftp", "key"));
+                    s.setPrivateKeyPassphraseRef(ref("sftp", "passphrase"));
+                }))),
+                argumentSet("s3 on AWS without endpoint", namespaced(s3("AWS", null))),
+                argumentSet("s3 on Ceph with https endpoint", namespaced(s3("Ceph", "https://s3.example.com"))),
+                // RCloneRemote may refer to either kind; remoteRef.kind defaults to RCloneRemote.
+                argumentSet("namespaced crypt referring to RCloneRemote by default", namespaced(crypt(null))),
+                argumentSet(
+                        "namespaced crypt referring to RCloneClusterRemote",
+                        namespaced(crypt(RemoteRef.Kind.CLUSTER_REMOTE))),
+                argumentSet(
+                        "cluster crypt referring to RCloneClusterRemote",
+                        cluster(crypt(RemoteRef.Kind.CLUSTER_REMOTE))));
+    }
 
+    @ParameterizedTest
+    @MethodSource("acceptedCases")
+    void createAccepted(HasMetadata resource) {
+        placeInTestNamespace(resource);
+        assertThat(client.resource(resource).create()).isNotNull();
+    }
+
+    static Stream<Arguments> rejectedCases() {
+        return Stream.of(
                 // CRD structural (OpenAPI) validation: one row per kind of constraint.
                 argumentSet(
                         "enum rejects unknown type",
@@ -123,17 +152,6 @@ class RemoteAdmissionTest {
 
                 // CEL: sftp credentials.
                 argumentSet(
-                        "valid sftp with password",
-                        namespaced(sftp(s -> s.setPasswordRef(ref("sftp", "password")))),
-                        null),
-                argumentSet(
-                        "valid sftp with private key and passphrase",
-                        namespaced(sftp(s -> {
-                            s.setPrivateKeyRef(ref("sftp", "key"));
-                            s.setPrivateKeyPassphraseRef(ref("sftp", "passphrase"));
-                        })),
-                        null),
-                argumentSet(
                         "CEL rejects sftp without password or private key",
                         namespaced(sftp(s -> {})),
                         "one of passwordRef or privateKeyRef must be set"),
@@ -146,9 +164,6 @@ class RemoteAdmissionTest {
                         "privateKeyPassphrase supplied but no private key used"),
 
                 // CEL: s3 endpoint.
-                argumentSet("valid s3 on AWS without endpoint", namespaced(s3("AWS", null)), null),
-                argumentSet(
-                        "valid s3 on Ceph with https endpoint", namespaced(s3("Ceph", "https://s3.example.com")), null),
                 argumentSet(
                         "CEL rejects s3 on non-AWS without endpoint",
                         namespaced(s3("Ceph", null)),
@@ -158,18 +173,8 @@ class RemoteAdmissionTest {
                         namespaced(s3("Ceph", "ftp://s3.example.com")),
                         "endpoint must be a valid http/https URL"),
 
-                // CEL: crypt remoteRef kind. RCloneRemote may refer to either kind; RCloneClusterRemote only to
-                // RCloneClusterRemote (remoteRef.kind defaults to RCloneRemote).
-                argumentSet(
-                        "valid namespaced crypt referring to RCloneRemote by default", namespaced(crypt(null)), null),
-                argumentSet(
-                        "valid namespaced crypt referring to RCloneClusterRemote",
-                        namespaced(crypt(RemoteRef.Kind.CLUSTER_REMOTE)),
-                        null),
-                argumentSet(
-                        "valid cluster crypt referring to RCloneClusterRemote",
-                        cluster(crypt(RemoteRef.Kind.CLUSTER_REMOTE)),
-                        null),
+                // CEL: RCloneClusterRemote may only refer to RCloneClusterRemote (remoteRef.kind defaults to
+                // RCloneRemote).
                 argumentSet(
                         "CEL rejects cluster crypt referring to RCloneRemote",
                         cluster(crypt(RemoteRef.Kind.REMOTE)),
@@ -181,11 +186,6 @@ class RemoteAdmissionTest {
 
                 // Webhook: one rejection per kind proves each webhook is wired; the rules themselves are covered by
                 // RemoteSpecValidatorTest.
-                argumentSet(
-                        "valid template with declared input",
-                        namespaced(templateWithInputs(
-                                ":webdav,pass=${password}:", Map.of("password", ref("webdav", "password")))),
-                        null),
                 argumentSet(
                         "webhook rejects namespaced template with undeclared input",
                         namespaced(template("${missing}")),
@@ -201,17 +201,12 @@ class RemoteAdmissionTest {
     }
 
     @ParameterizedTest
-    @MethodSource("createCases")
-    void create(HasMetadata resource, String wantError) {
+    @MethodSource("rejectedCases")
+    void createRejected(HasMetadata resource, String wantError) {
         placeInTestNamespace(resource);
-
-        if (wantError == null) {
-            client.resource(resource).create();
-        } else {
-            assertThatThrownBy(() -> client.resource(resource).create())
-                    .isInstanceOf(KubernetesClientException.class)
-                    .hasMessageContaining(wantError);
-        }
+        assertThatThrownBy(() -> client.resource(resource).create())
+                .isInstanceOf(KubernetesClientException.class)
+                .hasMessageContaining(wantError);
     }
 
     static Stream<Arguments> updateCases() {

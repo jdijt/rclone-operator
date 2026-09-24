@@ -38,7 +38,7 @@ webhooks:
       service:
         name: rclone-operator
         namespace: rclone-operator
-        path: /validate-rco-frozenbits-se-v1alpha1-rcloneremote
+        path: /webhooks/validate/rcloneremotes
         port: 443
     rules:
       - apiGroups: [rco.frozenbits.se]
@@ -53,7 +53,7 @@ webhooks:
       service:
         name: rclone-operator
         namespace: rclone-operator
-        path: /validate-rco-frozenbits-se-v1alpha1-rcloneclusterremote
+        path: /webhooks/validate/rcloneclusterremotes
         port: 443
     rules:
       - apiGroups: [rco.frozenbits.se]
