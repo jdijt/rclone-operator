@@ -1,58 +1,62 @@
 # rclone-operator
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+A Kubernetes operator for my homelab that runs [rclone](https://rclone.org) syncs declared as custom resources.
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+I have a bunch of rclone syncs (backups, mirrors, offloading to cloud storage) that are currently ad-hoc CronJobs and
+scripts. I want them to be:
 
-## Running the application in dev mode
+- declared as Kubernetes resources with a schema, to make them easier to manage.
+- observable: how fast did the last run go, how much data & how many files were transferred, when did it last succeed.
+- well-behaved as a group: not all hammering the same upstream at once (one of the upstreams is a Hetzner storage box,
+  and its connection limit is tight).
 
-You can run your application in dev mode that enables live coding using:
+It is built with [Quarkus](https://quarkus.io) and the [Java Operator SDK](https://javaoperatorsdk.io).
 
-```shell script
-./mvnw quarkus:dev
+## Feature / todo list
+
+- [x] `RCloneRemote` / `RCloneClusterRemote`: rclone remotes (sftp, s3, crypt, free-form template) with credentials
+  taken from Secrets, validated by CEL rules and an admission webhook.
+- [ ] CRDs to declare an rclone sync (source, destination, schedule, rclone flags).
+- [ ] Controller runs the sync on schedule and reports run state via status conditions.
+- [ ] Statistics per run in status: duration, transfer speed, bytes and files transferred, errors.
+- [ ] Prometheus metrics for the same statistics.
+- [ ] Resource constraints across jobs:
+  - [ ] per-upstream (remote) connection / concurrency limits
+  - [ ] cluster-wide max total bandwidth
+  - [ ] ... etc.
+- [ ] Sample CRs and an install bundle / Helm chart.
+- [ ] Narrow the generated RBAC. quarkus-operator-sdk gives the primary resources all common verbs (incl. create,
+  delete, finalizers), while the operator only needs get/list/watch plus get/update/patch on status. `@RBACRule` and
+  overrides in `src/main/kubernetes/kubernetes.yml` only add rules. Check newer extension versions or raise it
+  upstream.
+
+## Cluster dependencies
+
+- *cert-manager*: the generated manifests use it to issue the webhook serving certificate and inject its CA into the
+  `ValidatingWebhookConfiguration`.
+
+## Non goals
+
+- Replacing rclone's own configuration format: the operator schedules and observes rclone, it does not reinvent it.
+- Being a general-purpose job scheduler; this is rclone-specific on purpose.
+- TODO: expand as the design settles.
+
+## Getting started
+
+```sh
+./mvnw verify                 # unit tests, plus API-server tests against a real kube-apiserver (kube-api-test)
+./mvnw quarkus:dev            # run the operator against the current kubeconfig; applies the CRDs
+./mvnw package                # CRDs, RBAC, Deployment etc. are generated into target/kubernetes/
+kubectl apply -f samples/
 ```
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+The API-server tests download `kube-apiserver` and `etcd` to `~/.kubeapitest` on first use. Code is formatted with
+palantir-java-format via Spotless: `./mvnw spotless:apply`.
 
-## Packaging and running the application
+## LLM usage
 
-The application can be packaged using:
+Claude is used as a coding assistant on this project.
 
-```shell script
-./mvnw package
-```
+## License
 
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
-
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
-
-If you want to build an _über-jar_, execute the following command:
-
-```shell script
-./mvnw package -Dquarkus.package.jar.type=uber-jar
-```
-
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
-
-## Creating a native executable
-
-You can create a native executable using:
-
-```shell script
-./mvnw package -Dnative
-```
-
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
-
-```shell script
-./mvnw package -Dnative -Dquarkus.native.container-build=true
-```
-
-You can then execute your native executable with: `./target/rclone-operator-1.0.0-SNAPSHOT-runner`
-
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/maven-tooling>.
-
-## Related Guides
-
-- Operator SDK ([guide](https://docs.quarkiverse.io/quarkus-operator-sdk/dev/index.html)): Quarkus extension for the Java Operator SDK (https://javaoperatorsdk.io)
+Apache-2.0, see [LICENSE](LICENSE).

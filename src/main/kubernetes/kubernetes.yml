@@ -1,0 +1,62 @@
+# Merged by quarkus-kubernetes into target/kubernetes/kubernetes.yml.
+# Requires cert-manager in the cluster: it issues the webhook serving certificate and injects its CA into the
+# ValidatingWebhookConfiguration. The namespace is fixed by quarkus.kubernetes.namespace.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: rclone-operator-selfsigned
+  namespace: rclone-operator
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rclone-operator-webhook
+  namespace: rclone-operator
+spec:
+  secretName: rclone-operator-webhook-tls
+  dnsNames:
+    - rclone-operator.rclone-operator.svc
+    - rclone-operator.rclone-operator.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: rclone-operator-selfsigned
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: rclone-operator-validating-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: rclone-operator/rclone-operator-webhook
+webhooks:
+  - name: vrcloneremote.rco.frozenbits.se
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: rclone-operator
+        namespace: rclone-operator
+        path: /validate-rco-frozenbits-se-v1alpha1-rcloneremote
+        port: 443
+    rules:
+      - apiGroups: [rco.frozenbits.se]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [rcloneremotes]
+  - name: vrcloneclusterremote.rco.frozenbits.se
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: rclone-operator
+        namespace: rclone-operator
+        path: /validate-rco-frozenbits-se-v1alpha1-rcloneclusterremote
+        port: 443
+    rules:
+      - apiGroups: [rco.frozenbits.se]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [rcloneclusterremotes]

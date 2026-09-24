@@ -1,0 +1,14 @@
+apiVersion: rco.frozenbits.se/v1alpha1
+kind: RCloneRemote
+metadata:
+  name: rcloneremote-sample
+spec:
+  # A template remote: an rclone connection string in which every ${name} is filled in from a
+  # Secret key declared under inputs. Credentials never appear in the spec itself.
+  type: template
+  template:
+    template: ":webdav,url='https://webdav.example.com',vendor=other,user=sample,pass=${password}:"
+    inputs:
+      password:
+        name: rcloneremote-sample-webdav
+        key: password

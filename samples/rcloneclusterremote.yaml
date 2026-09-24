@@ -1,0 +1,9 @@
+apiVersion: rco.frozenbits.se/v1alpha1
+kind: RCloneClusterRemote
+metadata:
+  name: rcloneclusterremote-sample
+spec:
+  # A template remote without inputs: a plain rclone connection string.
+  type: template
+  template:
+    template: ":local:"
