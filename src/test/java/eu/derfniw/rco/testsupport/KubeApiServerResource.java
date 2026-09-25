@@ -22,12 +22,14 @@ import io.fabric8.kubernetes.api.model.admissionregistration.v1.ValidatingWebhoo
 import io.fabric8.kubernetes.api.model.admissionregistration.v1.ValidatingWebhookConfiguration;
 import io.fabric8.kubernetes.api.model.admissionregistration.v1.ValidatingWebhookConfigurationBuilder;
 import io.fabric8.kubernetes.client.Config;
+import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import io.smallrye.certs.CertificateGenerator;
 import io.smallrye.certs.CertificateRequest;
 import io.smallrye.certs.Format;
 import io.smallrye.certs.PemCertificateFiles;
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,6 +37,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Runs a real kube-apiserver and etcd (fabric8 kube-api-test) for {@code @QuarkusTest}s, and
@@ -49,6 +52,9 @@ public class KubeApiServerResource implements QuarkusTestResourceLifecycleManage
 
     /** Init arg: set to {@code "false"} to run without the validating webhooks registered. */
     public static final String WEBHOOKS = "webhooks";
+
+    /** Where the fabric8 CRD generator writes the CRDs at build time. */
+    private static final Path CRD_DIR = Path.of("target", "kubernetes");
 
     private KubeAPIServer apiServer;
     private boolean webhooks = true;
@@ -81,6 +87,11 @@ public class KubeApiServerResource implements QuarkusTestResourceLifecycleManage
             apiServer.start();
             var kubeConfig = Config.fromKubeconfig(apiServer.getKubeConfigYaml());
 
+            try (var client =
+                    new KubernetesClientBuilder().withConfig(kubeConfig).build()) {
+                applyCrds(client);
+            }
+
             if (webhooks) {
                 var caBundle = Base64.getEncoder().encodeToString(Files.readAllBytes(tls.certFile()));
                 var baseUrl = "https://localhost:" + httpsPort + "/";
@@ -107,11 +118,10 @@ public class KubeApiServerResource implements QuarkusTestResourceLifecycleManage
             }
 
             var props = new HashMap<String, String>();
-            props.put("quarkus.kubernetes-client.devservices.enabled", "false");
             props.put("quarkus.kubernetes-client.api-server-url", kubeConfig.getMasterUrl());
-            putFirst(props, "ca-cert", kubeConfig.getCaCertData(), kubeConfig.getCaCertFile());
-            putFirst(props, "client-cert", kubeConfig.getClientCertData(), kubeConfig.getClientCertFile());
-            putFirst(props, "client-key", kubeConfig.getClientKeyData(), kubeConfig.getClientKeyFile());
+            putEncodedData(props, "ca-cert", kubeConfig.getCaCertData(), kubeConfig.getCaCertFile());
+            putEncodedData(props, "client-cert", kubeConfig.getClientCertData(), kubeConfig.getClientCertFile());
+            putEncodedData(props, "client-key", kubeConfig.getClientKeyData(), kubeConfig.getClientKeyFile());
             props.put("quarkus.http.test-ssl-port", Integer.toString(httpsPort));
             props.put("quarkus.http.ssl.certificate.files", tls.certFile().toString());
             props.put("quarkus.http.ssl.certificate.key-files", tls.keyFile().toString());
@@ -130,11 +140,45 @@ public class KubeApiServerResource implements QuarkusTestResourceLifecycleManage
         }
     }
 
-    private static void putFirst(Map<String, String> props, String name, String data, String file) {
+    /**
+     * Always passes the certificate as {@code -data}, so it overrides any {@code -data} value another
+     * config source (such as a Dev Service) provides.
+     */
+    /**
+     * Applies the generated CRDs and waits until they are served. The operator applies them too, but
+     * starts its informers right away, which races the API server establishing a new CRD.
+     */
+    private static void applyCrds(KubernetesClient client) throws IOException {
+        try (var files = Files.list(CRD_DIR)) {
+            for (var file : files.filter(f -> f.toString().endsWith("-v1.yml")).toList()) {
+                try (var in = Files.newInputStream(file)) {
+                    var crd = client.apiextensions()
+                            .v1()
+                            .customResourceDefinitions()
+                            .load(in)
+                            .item();
+                    client.resource(crd).serverSideApply();
+                    client.resource(crd)
+                            .waitUntilCondition(
+                                    c -> c.getStatus() != null
+                                            && c.getStatus().getConditions() != null
+                                            && c.getStatus().getConditions().stream()
+                                                    .anyMatch(cond -> "Established".equals(cond.getType())
+                                                            && "True".equals(cond.getStatus())),
+                                    30,
+                                    TimeUnit.SECONDS);
+                }
+            }
+        }
+    }
+
+    private static void putEncodedData(Map<String, String> props, String name, String data, String file)
+            throws IOException {
+        if (data == null && file != null) {
+            data = Base64.getEncoder().encodeToString(Files.readAllBytes(Path.of(file)));
+        }
         if (data != null) {
             props.put("quarkus.kubernetes-client." + name + "-data", data);
-        } else if (file != null) {
-            props.put("quarkus.kubernetes-client." + name + "-file", file);
         }
     }
 
