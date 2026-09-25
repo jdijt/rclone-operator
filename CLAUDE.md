@@ -28,8 +28,13 @@ Package root `eu.derfniw.rco`:
 - `api.v1alpha1` — CRD model classes, group `rco.frozenbits.se`. Kinds carry an `RClone` prefix. CRDs are generated
   at build time by the fabric8 CRD generator from the annotations (`@ValidationRule`, `@Required`, `@Size`,
   `@Min`/`@Max`, `@Default`, `@AdditionalPrinterColumn`) into `target/kubernetes/`.
-- `remote` — `RemoteSpecValidator` (CDI bean, injected into the reconcilers and the webhook): checks CRD markers
-  can't express. No dependency on the Kubernetes client.
+- `validation` — shared by all resource kinds. `ResourceValidator<S>` validates a custom resource and returns
+  sorted `FieldError`s (Kubernetes field errors): Hibernate Validator on the spec, then an overridable
+  `customValidation` for checks that don't fit a constraint. Every constraint carries one `Reason` payload (the error
+  type); offending values go in the dynamic payload. No dependency on the Kubernetes client beyond `CustomResource`.
+- `remote` — Jakarta constraints for remote checks CRD markers can't express (`@SelectedBackendPresent`,
+  `@DeclaredPlaceholders`, plus `@NotNull`/`@NotBlank` on the model), and `RemoteValidator` (injected into the
+  reconcilers and the webhook).
 - `controller` — reconcilers. `AbstractRemoteReconciler` holds the logic shared by both remote kinds.
 - `webhook` — validating admission webhooks, a plain JAX-RS resource on fabric8's `AdmissionReview` model, served
   under `/webhooks/validate/<plural>`.
@@ -48,15 +53,20 @@ Package root `eu.derfniw.rco`:
 
 ## Testing
 
-- Plain JUnit 5 unit tests for the validator and the reconcile logic (`@ParameterizedTest` + `argumentSet` for tables).
-- `@QuarkusTest`s against a real kube-apiserver + etcd started by `KubeApiServerResource` (fabric8 kube-api-test). It registers the webhooks against the Quarkus test HTTPS port; pass the init arg
-  `webhooks=false` to run without them.
+- `@QuarkusTest`s with injected beans, also for unit-level logic like the validator and the reconcile logic
+  (`@ParameterizedTest` + `argumentSet` for tables). Beans use package-private `@Inject` fields.
+- The app starts the operator, so every `@QuarkusTest` needs a real kube-apiserver + etcd from `KubeApiServerResource`
+  (fabric8 kube-api-test). It registers the webhooks against the Quarkus test HTTPS port; pass the init arg
+  `webhooks=false` to run without them. Quarkus restarts the app for each distinct resource setup, so reuse plain
+  `@WithTestResource(KubeApiServerResource.class)` unless a test needs otherwise.
 - The running operator writes status concurrently with tests: update with `unlock().edit(...)` or re-fetch first.
 - e2e tests against kind (image build, cert-manager, metrics) are not ported yet.
 
 ## Conventions
 
 - rclone remote credentials live in Secrets and never in CRD specs, status, logs or events.
+- Never put user input into a constraint message template (Hibernate Validator interpolates `{…}` and `${…}`): use
+  message parameters or the dynamic payload.
 - Status is the source of truth for sync statistics: conditions for state, explicit units in field names
   (`bytesTransferred`, `bytesPerSecond`).
 - Reconciliation must be idempotent and safe against restarts: a restart mid-sync must not lose or double-count

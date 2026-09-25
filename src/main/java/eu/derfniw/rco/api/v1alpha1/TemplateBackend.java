@@ -16,8 +16,11 @@
 package eu.derfniw.rco.api.v1alpha1;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import eu.derfniw.rco.remote.DeclaredPlaceholders;
+import eu.derfniw.rco.validation.Reason;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.Size;
+import jakarta.validation.constraints.NotBlank;
 import java.util.Map;
 
 /**
@@ -26,12 +29,14 @@ import java.util.Map;
  * Secret keys. The author of the template is responsible for rclone's connection string quoting of the substituted
  * values.
  */
+@DeclaredPlaceholders(payload = Reason.Invalid.class)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class TemplateBackend implements Backend {
 
     /** The rclone connection string with {@code ${name}} placeholders for inputs. */
     @Required
     @Size(min = 1)
+    @NotBlank(payload = Reason.Required.class, message = "must be specified and not blank")
     private String template;
 
     /** Maps placeholder names to the Secret keys that fill them. */

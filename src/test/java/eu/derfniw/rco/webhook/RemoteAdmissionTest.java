@@ -185,7 +185,7 @@ class RemoteAdmissionTest {
                         "RCloneClusterRemote can only refer to other RCloneClusterRemotes."),
 
                 // Webhook: one rejection per kind proves each webhook is wired; the rules themselves are covered by
-                // RemoteSpecValidatorTest.
+                // RemoteValidatorTest.
                 argumentSet(
                         "webhook rejects namespaced template with undeclared input",
                         namespaced(template("${missing}")),

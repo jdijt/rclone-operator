@@ -19,8 +19,8 @@ import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
-import eu.derfniw.rco.remote.FieldError;
-import eu.derfniw.rco.remote.RemoteSpecValidator;
+import eu.derfniw.rco.remote.RemoteValidator;
+import eu.derfniw.rco.validation.FieldError;
 import io.fabric8.kubernetes.api.model.StatusBuilder;
 import io.fabric8.kubernetes.api.model.StatusCause;
 import io.fabric8.kubernetes.api.model.StatusCauseBuilder;
@@ -28,8 +28,8 @@ import io.fabric8.kubernetes.api.model.admission.v1.AdmissionResponseBuilder;
 import io.fabric8.kubernetes.api.model.admission.v1.AdmissionReview;
 import io.fabric8.kubernetes.api.model.admission.v1.AdmissionReviewBuilder;
 import io.fabric8.kubernetes.client.CustomResource;
-import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.utils.KubernetesSerialization;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import java.util.List;
@@ -42,13 +42,11 @@ import java.util.stream.Collectors;
 @Path("/webhooks/validate")
 public class RemoteValidationResource {
 
-    private final KubernetesSerialization serialization;
-    private final RemoteSpecValidator validator;
+    @Inject
+    KubernetesSerialization serialization;
 
-    public RemoteValidationResource(KubernetesClient client, RemoteSpecValidator validator) {
-        this.serialization = client.getKubernetesSerialization();
-        this.validator = validator;
-    }
+    @Inject
+    RemoteValidator validator;
 
     @POST
     @Path("rcloneremotes")
@@ -66,7 +64,7 @@ public class RemoteValidationResource {
             AdmissionReview review, Class<? extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>> type) {
         var request = review.getRequest();
         var remote = serialization.convertValue(request.getObject(), type);
-        var errors = validator.validate(remote.getSpec());
+        var errors = validator.validate(remote);
 
         var response = errors.isEmpty()
                 ? new AdmissionResponseBuilder().withAllowed(true)
@@ -104,14 +102,8 @@ public class RemoteValidationResource {
     }
 
     private static StatusCause cause(FieldError error) {
-        var reason =
-                switch (error.type()) {
-                    case REQUIRED -> "FieldValueRequired";
-                    case INVALID -> "FieldValueInvalid";
-                    case NOT_SUPPORTED -> "FieldValueNotSupported";
-                };
         return new StatusCauseBuilder()
-                .withReason(reason)
+                .withReason(error.type().causeReason())
                 .withField(error.field())
                 .withMessage(error.toString())
                 .build();

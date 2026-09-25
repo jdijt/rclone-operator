@@ -13,43 +13,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.derfniw.rco.remote;
+package eu.derfniw.rco.validation;
 
-/**
- * A validation error on a single field, modelled on Kubernetes' {@code field.Error}.
- *
- * @param field the dotted path to the field, e.g. {@code spec.template.template}
- * @param type what kind of error this is
- * @param value the offending value, or {@code null} when the field is missing
- * @param detail a human-readable explanation
- */
+/** A validation error on one field of a resource, as the Kubernetes API server reports it. */
 public record FieldError(String field, Type type, Object value, String detail) {
 
     public enum Type {
-        REQUIRED("Required value"),
-        INVALID("Invalid value"),
-        NOT_SUPPORTED("Unsupported value");
+        REQUIRED("Required value", "FieldValueRequired"),
+        INVALID("Invalid value", "FieldValueInvalid"),
+        NOT_SUPPORTED("Unsupported value", "FieldValueNotSupported");
 
         private final String description;
+        private final String causeReason;
 
-        Type(String description) {
+        Type(String description, String causeReason) {
             this.description = description;
+            this.causeReason = causeReason;
         }
 
         public String description() {
             return description;
         }
+
+        /** The reason of a {@code StatusCause} for this error. */
+        public String causeReason() {
+            return causeReason;
+        }
     }
 
-    static FieldError required(String field, String detail) {
+    public static FieldError required(String field, String detail) {
         return new FieldError(field, Type.REQUIRED, null, detail);
     }
 
-    static FieldError invalid(String field, Object value, String detail) {
+    public static FieldError invalid(String field, Object value, String detail) {
         return new FieldError(field, Type.INVALID, value, detail);
     }
 
-    static FieldError notSupported(String field, Object value, String detail) {
+    public static FieldError notSupported(String field, Object value, String detail) {
         return new FieldError(field, Type.NOT_SUPPORTED, value, detail);
     }
 

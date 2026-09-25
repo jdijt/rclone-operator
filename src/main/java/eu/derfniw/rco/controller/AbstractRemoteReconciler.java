@@ -15,16 +15,16 @@
  */
 package eu.derfniw.rco.controller;
 
-import eu.derfniw.rco.OperatorConfig;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
-import eu.derfniw.rco.remote.FieldError;
-import eu.derfniw.rco.remote.RemoteSpecValidator;
+import eu.derfniw.rco.remote.RemoteValidator;
+import eu.derfniw.rco.validation.FieldError;
 import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
+import jakarta.inject.Inject;
 import java.util.stream.Collectors;
 
 /**
@@ -34,17 +34,12 @@ import java.util.stream.Collectors;
 abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>>
         implements Reconciler<R> {
 
-    private final OperatorConfig config;
-    private final RemoteSpecValidator specValidator;
-
-    AbstractRemoteReconciler(OperatorConfig config, RemoteSpecValidator validator) {
-        this.config = config;
-        this.specValidator = validator;
-    }
+    @Inject
+    RemoteValidator validator;
 
     @Override
     public UpdateControl<R> reconcile(R resource, Context<R> context) {
-        var errors = specValidator.validate(resource.getSpec());
+        var errors = validator.validate(resource);
         boolean valid = errors.isEmpty();
 
         var condition = new ConditionBuilder()

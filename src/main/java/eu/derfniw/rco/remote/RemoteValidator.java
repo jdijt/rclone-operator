@@ -13,16 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.derfniw.rco.controller;
+package eu.derfniw.rco.remote;
 
-import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
-import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
-import io.javaoperatorsdk.operator.api.reconciler.MaxReconciliationInterval;
+import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
+import eu.derfniw.rco.validation.ResourceValidator;
 import jakarta.enterprise.context.ApplicationScoped;
-import java.util.concurrent.TimeUnit;
 
+/** Validates RCloneRemotes and RCloneClusterRemotes. */
 @ApplicationScoped
-@ControllerConfiguration(
-        name = "rcloneclusterremote",
-        maxReconciliationInterval = @MaxReconciliationInterval(interval = 1, timeUnit = TimeUnit.HOURS))
-public class RCloneClusterRemoteReconciler extends AbstractRemoteReconciler<RCloneClusterRemote> {}
+public class RemoteValidator extends ResourceValidator<RCloneRemoteSpec> {}

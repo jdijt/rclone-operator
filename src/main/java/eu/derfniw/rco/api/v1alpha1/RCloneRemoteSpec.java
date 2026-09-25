@@ -16,8 +16,12 @@
 package eu.derfniw.rco.api.v1alpha1;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import eu.derfniw.rco.remote.SelectedBackendPresent;
+import eu.derfniw.rco.validation.Reason;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.ValidationRule;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * Desired state of an RCloneRemote or RCloneClusterRemote.
@@ -36,23 +40,29 @@ import io.fabric8.generator.annotation.ValidationRule;
 @ValidationRule(
         value = "self.type == 'template' ? has(self.template) : !has(self.template)",
         message = "template must be set if and only if type is template")
+@SelectedBackendPresent(payload = Reason.Required.class)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RCloneRemoteSpec {
 
     /** Selects the rclone backend. Exactly the matching backend field must be set. */
     @Required
+    @NotNull(payload = Reason.NotSupported.class, message = "supported values: sftp, s3, crypt, template")
     private BackendType type;
 
     /** Configures an rclone sftp backend. */
+    @Valid
     private SftpBackend sftp;
 
     /** Configures an rclone crypt backend wrapping another remote. */
+    @Valid
     private CryptBackend crypt;
 
     /** Configures an rclone s3 backend. */
+    @Valid
     private S3Backend s3;
 
     /** Configures a remote from a free-form rclone connection string template with secret inputs. */
+    @Valid
     private TemplateBackend template;
 
     public BackendType getType() {

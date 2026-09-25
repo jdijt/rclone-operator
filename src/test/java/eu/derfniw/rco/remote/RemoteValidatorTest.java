@@ -20,35 +20,49 @@ import static org.junit.jupiter.params.provider.Arguments.argumentSet;
 
 import eu.derfniw.rco.api.v1alpha1.BackendType;
 import eu.derfniw.rco.api.v1alpha1.CryptBackend;
+import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.S3Backend;
 import eu.derfniw.rco.api.v1alpha1.SecretKeyRef;
 import eu.derfniw.rco.api.v1alpha1.SftpBackend;
 import eu.derfniw.rco.api.v1alpha1.TemplateBackend;
+import eu.derfniw.rco.testsupport.KubeApiServerResource;
+import eu.derfniw.rco.validation.FieldError;
+import io.quarkus.test.common.WithTestResource;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-class RemoteSpecValidatorTest {
+@QuarkusTest
+@WithTestResource(KubeApiServerResource.class)
+class RemoteValidatorTest {
 
     private static final String TEMPLATE_FIELD = "spec.template.template";
     private static final Map<String, SecretKeyRef> USED_INPUT = Map.of("used", new SecretKeyRef("completely", "fake"));
 
-    private final RemoteSpecValidator validator = new RemoteSpecValidator();
+    @Inject
+    RemoteValidator validator;
 
-    /** Expected error: compared on field and type, and the detail must contain {@code detailSubstring}. */
-    record Expected(String field, FieldError.Type type, String detailSubstring) {}
+    /**
+     * Expected error: compared on field, type and offending value, and the detail must contain {@code detailSubstring}.
+     */
+    record Expected(String field, FieldError.Type type, Object value, String detailSubstring) {}
 
     static Expected required(String field, String detail) {
-        return new Expected(field, FieldError.Type.REQUIRED, detail);
+        return new Expected(field, FieldError.Type.REQUIRED, null, detail);
     }
 
-    static Expected invalid(String detail) {
-        return new Expected(TEMPLATE_FIELD, FieldError.Type.INVALID, detail);
+    static Expected invalid(String value, String detail) {
+        return new Expected(TEMPLATE_FIELD, FieldError.Type.INVALID, value, detail);
     }
 
     static Stream<Arguments> templateCases() {
@@ -67,7 +81,7 @@ class RemoteSpecValidatorTest {
                 argumentSet(
                         "undeclared reference",
                         new TemplateBackend("a template referencing a ${undeclared} key", null),
-                        List.of(invalid("undeclared field undeclared"))),
+                        List.of(invalid("${undeclared}", "undeclared field undeclared"))),
                 argumentSet(
                         "empty template",
                         new TemplateBackend("", null),
@@ -80,28 +94,30 @@ class RemoteSpecValidatorTest {
                         "null template",
                         new TemplateBackend(null, null),
                         List.of(required(TEMPLATE_FIELD, "specified and not blank"))),
-                argumentSet("nested name", new TemplateBackend("${a.b}", null), List.of(invalid("malformed"))),
-                argumentSet("empty placeholder", new TemplateBackend("x=${}", null), List.of(invalid("malformed"))),
+                argumentSet(
+                        "nested name", new TemplateBackend("${a.b}", null), List.of(invalid("${a.b}", "malformed"))),
+                argumentSet(
+                        "empty placeholder", new TemplateBackend("x=${}", null), List.of(invalid("${}", "malformed"))),
                 argumentSet(
                         "whitespace inside placeholder",
                         new TemplateBackend("${ used }", USED_INPUT),
-                        List.of(invalid("malformed"))),
+                        List.of(invalid("${ used }", "malformed"))),
                 argumentSet(
                         "name starting with a digit",
                         new TemplateBackend("${1used}", null),
-                        List.of(invalid("malformed"))),
+                        List.of(invalid("${1used}", "malformed"))),
                 argumentSet(
                         "unterminated placeholder",
                         new TemplateBackend("an unterminated ${used", USED_INPUT),
-                        List.of(invalid("malformed placeholder at offset 16"))),
+                        List.of(invalid("${used", "malformed placeholder at offset 16"))),
                 argumentSet(
                         "two undeclared references",
                         new TemplateBackend("${one} and ${two}", null),
-                        List.of(invalid("undeclared field one"), invalid("undeclared field two"))),
+                        List.of(invalid("${one}", "undeclared field one"), invalid("${two}", "undeclared field two"))),
                 argumentSet(
                         "valid reference beside a malformed one",
                         new TemplateBackend("host=${used},pass=${used.x}", USED_INPUT),
-                        List.of(invalid("malformed"))),
+                        List.of(invalid("${used.x}", "malformed"))),
                 argumentSet(
                         "dollar without brace is literal",
                         new TemplateBackend("price=$5,name=$used,end=$", null),
@@ -119,8 +135,8 @@ class RemoteSpecValidatorTest {
 
     @ParameterizedTest
     @MethodSource("templateCases")
-    void validateTemplateBackend(TemplateBackend in, List<Expected> expected) {
-        assertMatches(validator.validateTemplateBackend(in, "spec.template"), expected);
+    void templateBackend(TemplateBackend in, List<Expected> expected) {
+        assertMatches(validate(with(spec(BackendType.TEMPLATE), s -> s.setTemplate(in))), expected);
     }
 
     static Stream<Arguments> specCases() {
@@ -150,7 +166,7 @@ class RemoteSpecValidatorTest {
                         with(
                                 spec(BackendType.TEMPLATE),
                                 s -> s.setTemplate(new TemplateBackend("host=${missing}", null))),
-                        List.of(invalid("undeclared field missing"))),
+                        List.of(invalid("${missing}", "undeclared field missing"))),
                 // Only the selected variant is consulted: a populated non-selected variant neither satisfies the
                 // selected one nor reports on its own.
                 argumentSet(
@@ -161,13 +177,28 @@ class RemoteSpecValidatorTest {
                         "missing type",
                         new RCloneRemoteSpec(),
                         List.of(new Expected(
-                                "spec.type", FieldError.Type.NOT_SUPPORTED, "sftp, s3, crypt, template"))));
+                                "spec.type", FieldError.Type.NOT_SUPPORTED, null, "sftp, s3, crypt, template"))));
     }
 
     @ParameterizedTest
     @MethodSource("specCases")
-    void validate(RCloneRemoteSpec in, List<Expected> expected) {
-        assertMatches(validator.validate(in), expected);
+    void spec(RCloneRemoteSpec in, List<Expected> expected) {
+        assertMatches(validate(in), expected);
+    }
+
+    /** The message on a missing type is a literal, so it must be kept in step with the enum. */
+    @Test
+    void missingTypeListsAllBackendTypes() {
+        var supported =
+                Arrays.stream(BackendType.values()).map(BackendType::value).collect(Collectors.joining(", "));
+        assertThat(validate(new RCloneRemoteSpec())).singleElement().satisfies(e -> assertThat(e.detail())
+                .isEqualTo("supported values: " + supported));
+    }
+
+    private List<FieldError> validate(RCloneRemoteSpec spec) {
+        var remote = new RCloneRemote();
+        remote.setSpec(spec);
+        return validator.validate(remote);
     }
 
     private static RCloneRemoteSpec spec(BackendType type) {
@@ -188,6 +219,7 @@ class RemoteSpecValidatorTest {
             var got = actual.get(i);
             assertThat(got.field()).as("field of %s", got).isEqualTo(want.field());
             assertThat(got.type()).as("type of %s", got).isEqualTo(want.type());
+            assertThat(got.value()).as("value of %s", got).isEqualTo(want.value());
             assertThat(got.detail()).as("detail of %s", got).contains(want.detailSubstring());
         }
     }

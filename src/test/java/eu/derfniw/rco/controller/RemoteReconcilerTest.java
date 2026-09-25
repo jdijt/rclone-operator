@@ -17,34 +17,33 @@ package eu.derfniw.rco.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import eu.derfniw.rco.OperatorConfig;
 import eu.derfniw.rco.api.v1alpha1.BackendType;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
 import eu.derfniw.rco.api.v1alpha1.TemplateBackend;
-import eu.derfniw.rco.remote.RemoteSpecValidator;
+import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
+import io.quarkus.test.common.WithTestResource;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 /**
- * Reconcile logic without an API server: what gets written to status and what the reconciler asks JOSDK to do. The
- * shared base class does the work, so the namespaced reconciler stands in for both kinds.
+ * Reconcile logic on in-memory resources: what gets written to status and what the reconciler asks JOSDK to do. The
+ * shared base class does the work, so the namespaced reconciler stands in for both kinds. The API server is only there
+ * because the operator starts with the app; these resources never reach it.
  */
+@QuarkusTest
+@WithTestResource(KubeApiServerResource.class)
 class RemoteReconcilerTest {
 
     private static final Duration INTERVAL = Duration.ofSeconds(10);
 
-    private final RCloneRemoteReconciler reconciler = new RCloneRemoteReconciler(
-            new OperatorConfig() {
-                @Override
-                public String operatorNamespace() {
-                    return "rclone-operator";
-                }
-            },
-            new RemoteSpecValidator());
+    @Inject
+    RCloneRemoteReconciler reconciler;
 
     @Test
     void validRemoteBecomesReadyAndIsRevalidated() {
