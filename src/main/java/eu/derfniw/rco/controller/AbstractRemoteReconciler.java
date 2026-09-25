@@ -35,14 +35,16 @@ abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpe
         implements Reconciler<R> {
 
     private final OperatorConfig config;
+    private final RemoteSpecValidator specValidator;
 
-    AbstractRemoteReconciler(OperatorConfig config) {
+    AbstractRemoteReconciler(OperatorConfig config, RemoteSpecValidator validator) {
         this.config = config;
+        this.specValidator = validator;
     }
 
     @Override
     public UpdateControl<R> reconcile(R resource, Context<R> context) {
-        var errors = RemoteSpecValidator.validate(resource.getSpec());
+        var errors = specValidator.validate(resource.getSpec());
         boolean valid = errors.isEmpty();
 
         var condition = new ConditionBuilder()

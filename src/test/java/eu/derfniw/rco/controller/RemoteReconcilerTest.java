@@ -27,7 +27,6 @@ import eu.derfniw.rco.remote.RemoteSpecValidator;
 import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import java.time.Duration;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -44,11 +43,6 @@ class RemoteReconcilerTest {
                 public String operatorNamespace() {
                     return "rclone-operator";
                 }
-
-                @Override
-                public Duration revalidationInterval() {
-                    return INTERVAL;
-                }
             },
             new RemoteSpecValidator());
 
@@ -59,7 +53,6 @@ class RemoteReconcilerTest {
         var control = reconciler.reconcile(remote, null);
 
         assertThat(control.isPatchStatus()).isTrue();
-        assertThat(control.getScheduleDelay()).isEqualTo(Optional.of(INTERVAL.toMillis()));
         var ready = readyCondition(remote);
         assertThat(ready.getStatus()).isEqualTo("True");
         assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_VALID);
@@ -91,7 +84,6 @@ class RemoteReconcilerTest {
         var control = reconciler.reconcile(remote, null);
 
         assertThat(control.isNoUpdate()).isTrue();
-        assertThat(control.getScheduleDelay()).isEqualTo(Optional.of(INTERVAL.toMillis()));
         assertThat(remote.getStatus().getConditions()).hasSize(1);
         assertThat(readyCondition(remote).getLastTransitionTime()).isEqualTo(firstTransition);
     }
