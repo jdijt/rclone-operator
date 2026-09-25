@@ -16,13 +16,10 @@
 package eu.derfniw.rco;
 
 import io.smallrye.config.ConfigMapping;
-import io.smallrye.config.WithDefault;
-import java.time.Duration;
 
 @ConfigMapping(prefix = "rclone-operator")
 public interface OperatorConfig {
 
     /** Namespace the operator runs in. Secrets of cluster-scoped remotes are resolved here. */
     String operatorNamespace();
-
 }
