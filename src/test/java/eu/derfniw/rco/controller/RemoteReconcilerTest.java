@@ -15,16 +15,14 @@
  */
 package eu.derfniw.rco.controller;
 
+import static eu.derfniw.rco.testsupport.Remotes.namespaced;
+import static eu.derfniw.rco.testsupport.Remotes.template;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import eu.derfniw.rco.api.v1alpha1.BackendType;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
-import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
-import eu.derfniw.rco.api.v1alpha1.TemplateBackend;
 import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import io.fabric8.kubernetes.api.model.Condition;
-import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -107,16 +105,9 @@ class RemoteReconcilerTest {
     }
 
     private static RCloneRemote remote(String template) {
-        var spec = new RCloneRemoteSpec();
-        spec.setType(BackendType.TEMPLATE);
-        spec.setTemplate(new TemplateBackend(template, null));
-        var remote = new RCloneRemote();
-        remote.setMetadata(new ObjectMetaBuilder()
-                .withNamespace("default")
-                .withName("remote")
-                .withGeneration(1L)
-                .build());
-        remote.setSpec(spec);
+        var remote = namespaced(template(t -> t.setTemplate(template)));
+        remote.getMetadata().setNamespace("default");
+        remote.getMetadata().setGeneration(1L);
         return remote;
     }
 

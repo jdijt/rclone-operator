@@ -29,6 +29,7 @@ public class RCloneRemoteStatus {
 
     public static final String REASON_VALID = "Valid";
     public static final String REASON_INVALID = "InvalidSpec";
+    public static final String REASON_SECRET_NOT_FOUND = "SecretNotFound";
 
     /**
      * The current state of the remote. Each condition has a unique type.

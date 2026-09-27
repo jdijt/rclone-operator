@@ -15,12 +15,14 @@
  */
 package eu.derfniw.rco.remote;
 
+import static eu.derfniw.rco.testsupport.Remotes.namespaced;
+import static eu.derfniw.rco.testsupport.Remotes.spec;
+import static eu.derfniw.rco.testsupport.Remotes.with;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.argumentSet;
 
 import eu.derfniw.rco.api.v1alpha1.BackendType;
 import eu.derfniw.rco.api.v1alpha1.CryptBackend;
-import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.S3Backend;
 import eu.derfniw.rco.api.v1alpha1.SecretKeyRef;
@@ -34,7 +36,6 @@ import jakarta.inject.Inject;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -182,7 +183,7 @@ class RemoteValidatorTest {
 
     @ParameterizedTest
     @MethodSource("specCases")
-    void spec(RCloneRemoteSpec in, List<Expected> expected) {
+    void specVariants(RCloneRemoteSpec in, List<Expected> expected) {
         assertMatches(validate(in), expected);
     }
 
@@ -196,20 +197,7 @@ class RemoteValidatorTest {
     }
 
     private List<FieldError> validate(RCloneRemoteSpec spec) {
-        var remote = new RCloneRemote();
-        remote.setSpec(spec);
-        return validator.validate(remote);
-    }
-
-    private static RCloneRemoteSpec spec(BackendType type) {
-        var spec = new RCloneRemoteSpec();
-        spec.setType(type);
-        return spec;
-    }
-
-    private static RCloneRemoteSpec with(RCloneRemoteSpec spec, Consumer<RCloneRemoteSpec> change) {
-        change.accept(spec);
-        return spec;
+        return validator.validate(namespaced(spec));
     }
 
     private static void assertMatches(List<FieldError> actual, List<Expected> expected) {
