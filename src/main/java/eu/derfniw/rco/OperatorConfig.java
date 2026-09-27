@@ -31,6 +31,6 @@ public interface OperatorConfig {
      * (An upper bound on how long a remote will stay non-ready even after its secrets are placed).
      */
     @WithDefault("1m")
-    @DurationMin(seconds = 1)
+    @DurationMin(seconds = 1, message = "must be at least 1 second")
     Duration secretRecheckInterval();
 }
