@@ -130,8 +130,8 @@ class RemoteReconcilerTest {
     }
 
     /**
-     * Secrets aren't watched, so a remote waiting for one is re-checked every minute, however long it has been
-     * waiting. {@code waited} is {@code null} for a remote that has no Ready condition yet.
+     * Secrets aren't watched, so a remote waiting for one is re-checked at the configured interval, however long it
+     * has been waiting. {@code waited} is {@code null} for a remote that has no Ready condition yet.
      */
     static Stream<Arguments> secretRetryCases() {
         return Stream.of(
@@ -141,7 +141,7 @@ class RemoteReconcilerTest {
 
     @ParameterizedTest
     @MethodSource("secretRetryCases")
-    void missingSecretIsRecheckedEveryMinute(Duration waited) {
+    void missingSecretIsRechecked(Duration waited) {
         // The API server has no such Secret.
         var remote = remote(template(t -> {
             t.setTemplate("${password}");
@@ -165,7 +165,8 @@ class RemoteReconcilerTest {
         var control = reconciler.reconcile(remote, null);
 
         assertThat(readyCondition(remote).getReason()).isEqualTo(RCloneRemoteStatus.REASON_SECRET_NOT_FOUND);
-        assertThat(control.getScheduleDelay()).contains(Duration.ofMinutes(1).toMillis());
+        // Set for the test profile in application.properties; differs from the default, so this fails if ignored.
+        assertThat(control.getScheduleDelay()).contains(Duration.ofSeconds(7).toMillis());
     }
 
     private static Condition readyCondition(RCloneRemote remote) {

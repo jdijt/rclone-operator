@@ -15,6 +15,7 @@
  */
 package eu.derfniw.rco.controller;
 
+import eu.derfniw.rco.OperatorConfig;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
 import eu.derfniw.rco.remote.RemoteValidator;
@@ -27,7 +28,6 @@ import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import jakarta.inject.Inject;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,18 +37,19 @@ import java.util.stream.Collectors;
 /**
  * Validates an RCloneRemote or RCloneClusterRemote, checks that the Secrets and keys it refers to exist, and reports
  * the result in its Ready condition. Remotes are re-checked periodically; Secrets aren't watched, so a remote waiting
- * for one is re-checked every {@link #SECRET_RECHECK}.
+ * for one is re-checked at {@link OperatorConfig#secretRecheckInterval()}.
  */
 abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>>
         implements Reconciler<R> {
-
-    static final Duration SECRET_RECHECK = Duration.ofMinutes(1);
 
     @Inject
     RemoteValidator validator;
 
     @Inject
     KubernetesClient client;
+
+    @Inject
+    OperatorConfig config;
 
     /** The namespace the remote's Secret references are resolved in. */
     protected abstract String secretNamespace(R resource);
@@ -79,7 +80,7 @@ abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpe
 
         UpdateControl<R> control = changed ? UpdateControl.patchStatus(resource) : UpdateControl.noUpdate();
         if (RCloneRemoteStatus.REASON_SECRET_NOT_FOUND.equals(condition.getReason())) {
-            control.rescheduleAfter(SECRET_RECHECK);
+            control.rescheduleAfter(config.secretRecheckInterval());
         }
         return control;
     }

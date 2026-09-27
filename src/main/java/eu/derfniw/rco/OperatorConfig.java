@@ -16,10 +16,19 @@
 package eu.derfniw.rco;
 
 import io.smallrye.config.ConfigMapping;
+import io.smallrye.config.WithDefault;
+import java.time.Duration;
 
 @ConfigMapping(prefix = "rclone-operator")
 public interface OperatorConfig {
 
     /** Namespace the operator runs in. Secrets of cluster-scoped remotes are resolved here. */
     String operatorNamespace();
+
+    /**
+     * How often a remote whose Secrets or keys don't exist yet is re-checked.
+     * (An upper bound on how long a remote will stay non-ready even after its secrets are placed).
+     */
+    @WithDefault("1m")
+    Duration secretRecheckInterval();
 }
