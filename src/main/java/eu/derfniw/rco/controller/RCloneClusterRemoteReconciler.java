@@ -15,14 +15,12 @@
  */
 package eu.derfniw.rco.controller;
 
-import eu.derfniw.rco.OperatorConfig;
 import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.MaxReconciliationInterval;
 import io.quarkiverse.operatorsdk.annotations.AdditionalRBACRules;
 import io.quarkiverse.operatorsdk.annotations.RBACRule;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import java.util.concurrent.TimeUnit;
 
 @ApplicationScoped
@@ -33,9 +31,6 @@ import java.util.concurrent.TimeUnit;
     @RBACRule(apiGroups = "", resources = "secrets", verbs = "get"),
 })
 public class RCloneClusterRemoteReconciler extends AbstractRemoteReconciler<RCloneClusterRemote> {
-
-    @Inject
-    OperatorConfig config;
 
     @Override
     protected String secretNamespace(RCloneClusterRemote resource) {
