@@ -22,6 +22,8 @@ import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.ValidationRule;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.util.LinkedHashMap;
+import java.util.SequencedMap;
 
 /**
  * Desired state of an RCloneRemote or RCloneClusterRemote.
@@ -116,5 +118,18 @@ public class RCloneRemoteSpec {
             case CRYPT -> crypt;
             case TEMPLATE -> template;
         };
+    }
+
+    /**
+     * The Secret references of the selected backend, keyed by field path relative to the spec (e.g. {@code
+     * sftp.passwordRef}). Empty if no backend is selected.
+     */
+    public SequencedMap<String, SecretKeyRef> secretKeyRefs() {
+        var refs = new LinkedHashMap<String, SecretKeyRef>();
+        var backend = selectedBackend();
+        if (backend != null) {
+            backend.secretKeyRefs().forEach((field, ref) -> refs.put(type.value() + "." + field, ref));
+        }
+        return refs;
     }
 }

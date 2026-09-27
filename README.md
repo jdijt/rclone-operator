@@ -15,7 +15,8 @@ It is built with [Quarkus](https://quarkus.io) and the [Java Operator SDK](https
 ## Feature / todo list
 
 - [x] `RCloneRemote` / `RCloneClusterRemote`: rclone remotes (sftp, s3, crypt, free-form template) with credentials
-  taken from Secrets, validated by CEL rules and an admission webhook.
+  taken from Secrets, validated by CEL rules and an admission webhook. A remote is only Ready once every referenced
+  Secret and key exists (checked on reconcile; Secret changes are not watched yet).
 - [ ] CRDs to declare an rclone sync (source, destination, schedule, rclone flags).
 - [ ] Controller runs the sync on schedule and reports run state via status conditions.
 - [ ] Statistics per run in status: duration, transfer speed, bytes and files transferred, errors.

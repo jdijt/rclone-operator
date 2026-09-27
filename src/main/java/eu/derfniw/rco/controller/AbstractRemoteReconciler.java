@@ -20,32 +20,54 @@ import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
 import eu.derfniw.rco.remote.RemoteValidator;
 import eu.derfniw.rco.validation.FieldError;
 import io.fabric8.kubernetes.api.model.ConditionBuilder;
+import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.CustomResource;
+import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import jakarta.inject.Inject;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Validates an RCloneRemote or RCloneClusterRemote and reports the result in its Ready condition. Valid remotes are
- * re-validated periodically.
+ * Validates an RCloneRemote or RCloneClusterRemote, checks that the Secrets and keys it refers to exist, and reports
+ * the result in its Ready condition. Remotes are re-checked periodically; Secrets aren't watched, so a remote waiting
+ * for one is re-checked every {@link #SECRET_RECHECK}.
  */
 abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>>
         implements Reconciler<R> {
 
+    static final Duration SECRET_RECHECK = Duration.ofMinutes(1);
+
     @Inject
     RemoteValidator validator;
+
+    @Inject
+    KubernetesClient client;
+
+    /** The namespace the remote's Secret references are resolved in. */
+    protected abstract String secretNamespace(R resource);
 
     @Override
     public UpdateControl<R> reconcile(R resource, Context<R> context) {
         var errors = validator.validate(resource);
-        boolean valid = errors.isEmpty();
+        var reason = RCloneRemoteStatus.REASON_INVALID;
+        // Secrets are only looked up for a valid spec: an invalid one is reported as such first.
+        if (errors.isEmpty()) {
+            errors = unresolvedSecretRefs(resource);
+            reason = RCloneRemoteStatus.REASON_SECRET_NOT_FOUND;
+        }
+        boolean ready = errors.isEmpty();
 
         var condition = new ConditionBuilder()
                 .withType(RCloneRemoteStatus.READY)
-                .withStatus(valid ? "True" : "False")
-                .withReason(valid ? RCloneRemoteStatus.REASON_VALID : RCloneRemoteStatus.REASON_INVALID)
+                .withStatus(ready ? "True" : "False")
+                .withReason(ready ? RCloneRemoteStatus.REASON_VALID : reason)
                 .withMessage(errors.stream().map(FieldError::toString).collect(Collectors.joining("; ")))
                 .withObservedGeneration(resource.getMetadata().getGeneration())
                 .build();
@@ -55,10 +77,35 @@ abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpe
         }
         boolean changed = Conditions.set(resource.getStatus().getConditions(), condition);
 
-        if (changed) {
-            return UpdateControl.patchStatus(resource);
-        } else {
-            return UpdateControl.noUpdate();
+        UpdateControl<R> control = changed ? UpdateControl.patchStatus(resource) : UpdateControl.noUpdate();
+        if (RCloneRemoteStatus.REASON_SECRET_NOT_FOUND.equals(condition.getReason())) {
+            control.rescheduleAfter(SECRET_RECHECK);
         }
+        return control;
+    }
+
+    /**
+     * An error per Secret reference whose Secret or key does not exist, in field order. Only names and keys are
+     * reported, never Secret data.
+     */
+    private List<FieldError> unresolvedSecretRefs(R resource) {
+        var namespace = secretNamespace(resource);
+        var secrets = new HashMap<String, Optional<Secret>>();
+        var errors = new ArrayList<FieldError>();
+        resource.getSpec().secretKeyRefs().forEach((field, ref) -> {
+            var secret = secrets.computeIfAbsent(
+                    ref.getName(),
+                    name -> Optional.ofNullable(client.secrets()
+                            .inNamespace(namespace)
+                            .withName(name)
+                            .get()));
+            if (secret.isEmpty()) {
+                errors.add(FieldError.notFound("spec." + field, ref.getName(), "Secret does not exist"));
+            } else if (secret.get().getData() == null || !secret.get().getData().containsKey(ref.getKey())) {
+                errors.add(FieldError.notFound(
+                        "spec." + field, ref.getKey(), "key does not exist in Secret " + ref.getName()));
+            }
+        });
+        return errors;
     }
 }

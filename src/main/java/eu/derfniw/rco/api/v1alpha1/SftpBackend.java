@@ -22,6 +22,8 @@ import io.fabric8.generator.annotation.Min;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.Size;
 import io.fabric8.generator.annotation.ValidationRule;
+import java.util.LinkedHashMap;
+import java.util.SequencedMap;
 
 /** Maps to rclone's sftp backend. At least one of passwordRef or privateKeyRef must be set. */
 @ValidationRule(
@@ -67,6 +69,21 @@ public final class SftpBackend implements Backend {
      */
     @Min(1)
     private Integer connections;
+
+    @Override
+    public SequencedMap<String, SecretKeyRef> secretKeyRefs() {
+        var refs = new LinkedHashMap<String, SecretKeyRef>();
+        if (passwordRef != null) {
+            refs.put("passwordRef", passwordRef);
+        }
+        if (privateKeyRef != null) {
+            refs.put("privateKeyRef", privateKeyRef);
+        }
+        if (privateKeyPassphraseRef != null) {
+            refs.put("privateKeyPassphraseRef", privateKeyPassphraseRef);
+        }
+        return refs;
+    }
 
     public String getHost() {
         return host;
