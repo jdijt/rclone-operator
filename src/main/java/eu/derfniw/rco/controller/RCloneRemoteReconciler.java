@@ -30,4 +30,10 @@ import java.util.concurrent.TimeUnit;
 @AdditionalRBACRules({
     @RBACRule(apiGroups = "", resources = "secrets", verbs = "get"),
 })
-public class RCloneRemoteReconciler extends AbstractRemoteReconciler<RCloneRemote> {}
+public class RCloneRemoteReconciler extends AbstractRemoteReconciler<RCloneRemote> {
+
+    @Override
+    protected String secretNamespace(RCloneRemote resource) {
+        return resource.getMetadata().getNamespace();
+    }
+}

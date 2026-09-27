@@ -16,23 +16,35 @@
 package eu.derfniw.rco.controller;
 
 import static eu.derfniw.rco.testsupport.Remotes.namespaced;
+import static eu.derfniw.rco.testsupport.Remotes.ref;
 import static eu.derfniw.rco.testsupport.Remotes.template;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.params.provider.Arguments.argumentSet;
 
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
+import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
 import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import io.fabric8.kubernetes.api.model.Condition;
+import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Reconcile logic on in-memory resources: what gets written to status and what the reconciler asks JOSDK to do. The
- * shared base class does the work, so the namespaced reconciler stands in for both kinds. The API server is only there
- * because the operator starts with the app; these resources never reach it.
+ * shared base class does the work, so the namespaced reconciler stands in for both kinds. These resources never reach
+ * the API server; the reconciler only looks up the Secrets they refer to there.
  */
 @QuarkusTest
 @WithTestResource(KubeApiServerResource.class)
@@ -55,6 +67,8 @@ class RemoteReconcilerTest {
         assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_VALID);
         assertThat(ready.getObservedGeneration()).isEqualTo(1L);
         assertThat(ready.getLastTransitionTime()).isNotBlank();
+        // Left to the periodic re-check.
+        assertThat(control.getScheduleDelay()).isEmpty();
     }
 
     @Test
@@ -105,10 +119,53 @@ class RemoteReconcilerTest {
     }
 
     private static RCloneRemote remote(String template) {
-        var remote = namespaced(template(t -> t.setTemplate(template)));
+        return remote(template(t -> t.setTemplate(template)));
+    }
+
+    private static RCloneRemote remote(RCloneRemoteSpec spec) {
+        var remote = namespaced(spec);
         remote.getMetadata().setNamespace("default");
         remote.getMetadata().setGeneration(1L);
         return remote;
+    }
+
+    /**
+     * Secrets aren't watched, so a remote waiting for one is re-checked every minute, however long it has been
+     * waiting. {@code waited} is {@code null} for a remote that has no Ready condition yet.
+     */
+    static Stream<Arguments> secretRetryCases() {
+        return Stream.of(
+                argumentSet("just became unready", (Duration) null),
+                argumentSet("unready for an hour", Duration.ofHours(1)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("secretRetryCases")
+    void missingSecretIsRecheckedEveryMinute(Duration waited) {
+        // The API server has no such Secret.
+        var remote = remote(template(t -> {
+            t.setTemplate("${password}");
+            t.setInputs(Map.of("password", ref("missing-" + UUID.randomUUID(), "password")));
+        }));
+        if (waited != null) {
+            var status = new RCloneRemoteStatus();
+            status.getConditions()
+                    .add(new ConditionBuilder()
+                            .withType(RCloneRemoteStatus.READY)
+                            .withStatus("False")
+                            .withReason(RCloneRemoteStatus.REASON_SECRET_NOT_FOUND)
+                            .withLastTransitionTime(Instant.now()
+                                    .minus(waited)
+                                    .truncatedTo(ChronoUnit.SECONDS)
+                                    .toString())
+                            .build());
+            remote.setStatus(status);
+        }
+
+        var control = reconciler.reconcile(remote, null);
+
+        assertThat(readyCondition(remote).getReason()).isEqualTo(RCloneRemoteStatus.REASON_SECRET_NOT_FOUND);
+        assertThat(control.getScheduleDelay()).contains(Duration.ofMinutes(1).toMillis());
     }
 
     private static Condition readyCondition(RCloneRemote remote) {

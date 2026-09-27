@@ -19,6 +19,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.fabric8.generator.annotation.Default;
 import io.fabric8.generator.annotation.Required;
+import java.util.LinkedHashMap;
+import java.util.SequencedMap;
 
 /** Maps to rclone's crypt backend, which encrypts another remote. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -74,6 +76,18 @@ public final class CryptBackend implements Backend {
     /** Selects the encoding of encrypted file names (rclone option: filename_encoding). */
     @Default("base32")
     private FilenameEncoding filenameEncoding;
+
+    @Override
+    public SequencedMap<String, SecretKeyRef> secretKeyRefs() {
+        var refs = new LinkedHashMap<String, SecretKeyRef>();
+        if (passwordRef != null) {
+            refs.put("passwordRef", passwordRef);
+        }
+        if (saltRef != null) {
+            refs.put("saltRef", saltRef);
+        }
+        return refs;
+    }
 
     public RemoteRef getRemoteRef() {
         return remoteRef;

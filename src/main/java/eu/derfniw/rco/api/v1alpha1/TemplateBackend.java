@@ -21,7 +21,10 @@ import eu.derfniw.rco.validation.Reason;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.Size;
 import jakarta.validation.constraints.NotBlank;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.SequencedMap;
+import java.util.TreeMap;
 
 /**
  * Builds a remote from an rclone connection string template (e.g. {@code
@@ -47,6 +50,16 @@ public final class TemplateBackend implements Backend {
     public TemplateBackend(String template, Map<String, SecretKeyRef> inputs) {
         this.template = template;
         this.inputs = inputs;
+    }
+
+    /** The inputs, sorted by placeholder name. */
+    @Override
+    public SequencedMap<String, SecretKeyRef> secretKeyRefs() {
+        var refs = new LinkedHashMap<String, SecretKeyRef>();
+        if (inputs != null) {
+            new TreeMap<>(inputs).forEach((name, ref) -> refs.put("inputs[" + name + "]", ref));
+        }
+        return refs;
     }
 
     public String getTemplate() {

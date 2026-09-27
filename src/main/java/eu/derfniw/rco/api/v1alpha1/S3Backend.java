@@ -20,6 +20,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.Size;
 import io.fabric8.generator.annotation.ValidationRule;
+import java.util.LinkedHashMap;
+import java.util.SequencedMap;
 
 /**
  * Maps to rclone's s3 backend. The bucket is not part of the remote; it is the first path element on the sync
@@ -68,6 +70,18 @@ public final class S3Backend implements Backend {
      * no_check_bucket).
      */
     private Boolean noCheckBucket;
+
+    @Override
+    public SequencedMap<String, SecretKeyRef> secretKeyRefs() {
+        var refs = new LinkedHashMap<String, SecretKeyRef>();
+        if (accessKeyIDRef != null) {
+            refs.put("accessKeyIDRef", accessKeyIDRef);
+        }
+        if (secretAccessKeyRef != null) {
+            refs.put("secretAccessKeyRef", secretAccessKeyRef);
+        }
+        return refs;
+    }
 
     public String getProvider() {
         return provider;

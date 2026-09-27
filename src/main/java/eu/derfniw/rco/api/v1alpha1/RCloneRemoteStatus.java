@@ -29,6 +29,7 @@ public class RCloneRemoteStatus {
 
     public static final String REASON_VALID = "Valid";
     public static final String REASON_INVALID = "InvalidSpec";
+    /** A referenced Secret, or a key in it, does not exist. */
     public static final String REASON_SECRET_NOT_FOUND = "SecretNotFound";
 
     /**

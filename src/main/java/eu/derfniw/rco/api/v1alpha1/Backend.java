@@ -15,5 +15,11 @@
  */
 package eu.derfniw.rco.api.v1alpha1;
 
+import java.util.SequencedMap;
+
 /** One variant of the {@link RCloneRemoteSpec} union. */
-public sealed interface Backend permits SftpBackend, S3Backend, CryptBackend, TemplateBackend {}
+public sealed interface Backend permits SftpBackend, S3Backend, CryptBackend, TemplateBackend {
+
+    /** The Secret references that are set, keyed by field path relative to this backend, in declaration order. */
+    SequencedMap<String, SecretKeyRef> secretKeyRefs();
+}

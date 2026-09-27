@@ -21,7 +21,8 @@ public record FieldError(String field, Type type, Object value, String detail) {
     public enum Type {
         REQUIRED("Required value", "FieldValueRequired"),
         INVALID("Invalid value", "FieldValueInvalid"),
-        NOT_SUPPORTED("Unsupported value", "FieldValueNotSupported");
+        NOT_SUPPORTED("Unsupported value", "FieldValueNotSupported"),
+        NOT_FOUND("Not found", "FieldValueNotFound");
 
         private final String description;
         private final String causeReason;
@@ -51,6 +52,10 @@ public record FieldError(String field, Type type, Object value, String detail) {
 
     public static FieldError notSupported(String field, Object value, String detail) {
         return new FieldError(field, Type.NOT_SUPPORTED, value, detail);
+    }
+
+    public static FieldError notFound(String field, Object value, String detail) {
+        return new FieldError(field, Type.NOT_FOUND, value, detail);
     }
 
     /** Renders the error the way the Kubernetes API server does, e.g. {@code spec.x: Invalid value: "y": detail}. */
