@@ -73,19 +73,25 @@ class RemoteAdmissionTest {
 
     static Stream<Arguments> acceptedCases() {
         return Stream.of(
-                argumentSet("namespaced template", namespaced(template(t -> t.setTemplate("valid")))),
-                argumentSet("cluster template", cluster(template(t -> t.setTemplate("valid")))),
+                // Every builder's untouched default, for both kinds: the other cases change one thing of it, so it
+                // must be valid by itself.
+                argumentSet("namespaced default template", namespaced(template(t -> {}))),
+                argumentSet("cluster default template", cluster(template(t -> {}))),
+                argumentSet("namespaced default sftp, with password", namespaced(sftp(s -> {}))),
+                argumentSet("cluster default sftp, with password", cluster(sftp(s -> {}))),
+                argumentSet("namespaced default s3, on AWS without endpoint", namespaced(s3(s -> {}))),
+                argumentSet("cluster default s3, on AWS without endpoint", cluster(s3(s -> {}))),
+                argumentSet("namespaced default crypt, referring to RCloneClusterRemote", namespaced(crypt(c -> {}))),
+                argumentSet("cluster default crypt, referring to RCloneClusterRemote", cluster(crypt(c -> {}))),
                 argumentSet("template with declared input", namespaced(template(t -> {
                     t.setTemplate(":webdav,pass=${password}:");
                     t.setInputs(Map.of("password", ref("webdav", "password")));
                 }))),
-                argumentSet("sftp with password", namespaced(sftp(s -> {}))),
                 argumentSet("sftp with private key and passphrase", namespaced(sftp(s -> {
                     s.setPasswordRef(null);
                     s.setPrivateKeyRef(ref("sftp", "key"));
                     s.setPrivateKeyPassphraseRef(ref("sftp", "passphrase"));
                 }))),
-                argumentSet("s3 on AWS without endpoint", namespaced(s3(s -> {}))),
                 argumentSet("s3 on Ceph with https endpoint", namespaced(s3(s -> {
                     s.setProvider("Ceph");
                     s.setEndpoint("https://s3.example.com");
@@ -93,11 +99,7 @@ class RemoteAdmissionTest {
                 // RCloneRemote may refer to either kind; remoteRef.kind defaults to RCloneRemote.
                 argumentSet(
                         "namespaced crypt referring to RCloneRemote by default",
-                        namespaced(crypt(c -> c.getRemoteRef().setKind(null)))),
-                argumentSet("namespaced crypt referring to RCloneClusterRemote", namespaced(crypt(c -> c.getRemoteRef()
-                        .setKind(RemoteRef.Kind.CLUSTER_REMOTE)))),
-                argumentSet("cluster crypt referring to RCloneClusterRemote", cluster(crypt(c -> c.getRemoteRef()
-                        .setKind(RemoteRef.Kind.CLUSTER_REMOTE)))));
+                        namespaced(crypt(c -> c.getRemoteRef().setKind(null)))));
     }
 
     @ParameterizedTest
