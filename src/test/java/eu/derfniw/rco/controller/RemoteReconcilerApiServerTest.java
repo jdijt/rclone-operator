@@ -31,6 +31,7 @@ import eu.derfniw.rco.api.v1alpha1.BackendType;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
+import eu.derfniw.rco.api.v1alpha1.SecretKeyRef;
 import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.HasMetadata;
@@ -42,10 +43,13 @@ import io.quarkus.test.common.ResourceArg;
 import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import java.lang.reflect.ParameterizedType;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.SequencedMap;
 import java.util.UUID;
@@ -90,6 +94,11 @@ class RemoteReconcilerApiServerTest {
         SECRET_MISSING,
         /** The Secret exists without the key of the backend's first reference: only that reference is unresolved. */
         KEY_MISSING,
+        /**
+         * A Secret of that name with every key exists, but in the other scope's namespace: the operator namespace for
+         * a namespaced remote, another namespace for a cluster remote. It must not be found.
+         */
+        OTHER_NAMESPACE,
         /** The Secret has every referenced key. */
         PRESENT
     }
@@ -173,20 +182,15 @@ class RemoteReconcilerApiServerTest {
         var firstRef = withRefs.keysByField().firstEntry();
 
         // Created before the remote, so the outcome doesn't depend on watching Secrets.
-        if (state != SecretState.SECRET_MISSING) {
-            var data = new LinkedHashMap<String, String>();
-            withRefs.keysByField().values().forEach(key -> data.put(key, "value of " + key));
-            if (state == SecretState.KEY_MISSING) {
-                data.remove(firstRef.getValue());
+        var keys = new ArrayList<>(withRefs.keysByField().values());
+        switch (state) {
+            case SECRET_MISSING -> {}
+            case KEY_MISSING -> createSecret(namespace, secretName, keys.subList(1, keys.size()));
+            case OTHER_NAMESPACE -> {
+                var other = scope == Scope.NAMESPACED ? operatorNamespace() : freshNamespace();
+                createSecret(other, secretName, keys);
             }
-            client.resource(new SecretBuilder()
-                            .withNewMetadata()
-                            .withNamespace(namespace)
-                            .withName(secretName)
-                            .endMetadata()
-                            .withStringData(data)
-                            .build())
-                    .create();
+            case PRESENT -> createSecret(namespace, secretName, keys);
         }
         var created = client.resource(remote).create();
 
@@ -196,7 +200,7 @@ class RemoteReconcilerApiServerTest {
                 assertThat(ready.getStatus()).isEqualTo("True");
                 assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_VALID);
             }
-            case SECRET_MISSING -> {
+            case SECRET_MISSING, OTHER_NAMESPACE -> {
                 assertThat(ready.getStatus()).isEqualTo("False");
                 assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_SECRET_NOT_FOUND);
                 assertThat(ready.getMessage())
@@ -216,45 +220,78 @@ class RemoteReconcilerApiServerTest {
     }
 
     /**
+     * Guards the fixture of {@link #statusReflectsSecretRefs}: it must set every Secret reference of the backend (so a
+     * reference added to a backend is added there too), and its keys must be distinct and never part of a field path
+     * (or asserting that the message names a key would pass whenever it names the field).
+     */
+    @ParameterizedTest
+    @EnumSource(BackendType.class)
+    void secretRefFixtureSetsEveryReference(BackendType type) throws IllegalAccessException {
+        var withRefs = specWithSecretRefs(type, "secret");
+        var backend = withRefs.spec().selectedBackend();
+
+        int refs = 0;
+        for (var field : backend.getClass().getDeclaredFields()) {
+            field.setAccessible(true);
+            if (field.getType() == SecretKeyRef.class) {
+                assertThat(field.get(backend)).as(field.getName()).isNotNull();
+                refs++;
+            } else if (field.getGenericType() instanceof ParameterizedType map
+                    && map.getRawType() == Map.class
+                    && map.getActualTypeArguments()[1] == SecretKeyRef.class) {
+                var inputs = (Map<?, ?>) field.get(backend);
+                assertThat(inputs).as(field.getName()).isNotEmpty();
+                refs += inputs.size();
+            }
+        }
+        assertThat(withRefs.keysByField()).hasSize(refs);
+
+        assertThat(withRefs.keysByField().values()).doesNotHaveDuplicates();
+        for (var key : withRefs.keysByField().values()) {
+            assertThat(withRefs.keysByField().sequencedKeySet()).noneMatch(field -> field.contains(key));
+        }
+    }
+
+    /**
      * A spec for {@code type} with every Secret reference of its backend set, each to its own key of the Secret
-     * {@code secretName}.
+     * {@code secretName}. Keys are opaque, so a message only names one by reporting it.
      */
     private static SpecWithRefs specWithSecretRefs(BackendType type, String secretName) {
         var keysByField = new LinkedHashMap<String, String>();
         var spec =
                 switch (type) {
                     case SFTP -> {
-                        keysByField.put("spec.sftp.passwordRef", "password");
-                        keysByField.put("spec.sftp.privateKeyRef", "privateKey");
-                        keysByField.put("spec.sftp.privateKeyPassphraseRef", "privateKeyPassphrase");
+                        keysByField.put("spec.sftp.passwordRef", "secret-key-1");
+                        keysByField.put("spec.sftp.privateKeyRef", "secret-key-2");
+                        keysByField.put("spec.sftp.privateKeyPassphraseRef", "secret-key-3");
                         yield sftp(s -> {
-                            s.setPasswordRef(ref(secretName, "password"));
-                            s.setPrivateKeyRef(ref(secretName, "privateKey"));
-                            s.setPrivateKeyPassphraseRef(ref(secretName, "privateKeyPassphrase"));
+                            s.setPasswordRef(ref(secretName, "secret-key-1"));
+                            s.setPrivateKeyRef(ref(secretName, "secret-key-2"));
+                            s.setPrivateKeyPassphraseRef(ref(secretName, "secret-key-3"));
                         });
                     }
                     case S3 -> {
-                        keysByField.put("spec.s3.accessKeyIDRef", "accessKeyID");
-                        keysByField.put("spec.s3.secretAccessKeyRef", "secretAccessKey");
+                        keysByField.put("spec.s3.accessKeyIDRef", "secret-key-1");
+                        keysByField.put("spec.s3.secretAccessKeyRef", "secret-key-2");
                         yield s3(s -> {
-                            s.setAccessKeyIDRef(ref(secretName, "accessKeyID"));
-                            s.setSecretAccessKeyRef(ref(secretName, "secretAccessKey"));
+                            s.setAccessKeyIDRef(ref(secretName, "secret-key-1"));
+                            s.setSecretAccessKeyRef(ref(secretName, "secret-key-2"));
                         });
                     }
                     case CRYPT -> {
-                        keysByField.put("spec.crypt.passwordRef", "password");
-                        keysByField.put("spec.crypt.saltRef", "salt");
+                        keysByField.put("spec.crypt.passwordRef", "secret-key-1");
+                        keysByField.put("spec.crypt.saltRef", "secret-key-2");
                         // The wrapped remote isn't checked here.
                         yield crypt(s -> {
-                            s.setPasswordRef(ref(secretName, "password"));
-                            s.setSaltRef(ref(secretName, "salt"));
+                            s.setPasswordRef(ref(secretName, "secret-key-1"));
+                            s.setSaltRef(ref(secretName, "secret-key-2"));
                         });
                     }
                     case TEMPLATE -> {
-                        keysByField.put("spec.template.inputs[password]", "password");
+                        keysByField.put("spec.template.inputs[password]", "secret-key-1");
                         yield template(t -> {
                             t.setTemplate(":webdav,url=https://example.com,pass=${password}:");
-                            t.setInputs(Map.of("password", ref(secretName, "password")));
+                            t.setInputs(Map.of("password", ref(secretName, "secret-key-1")));
                         });
                     }
                 };
@@ -263,19 +300,30 @@ class RemoteReconcilerApiServerTest {
 
     /**
      * Gives a namespaced remote a fresh namespace, so tests don't collide on names, and returns the namespace its
-     * Secrets are resolved in: that one, or the operator namespace for a cluster remote (created if needed).
+     * Secrets are resolved in: that one, or the operator namespace for a cluster remote.
      */
     private String placeInTestNamespace(HasMetadata remote) {
         if (remote instanceof RCloneRemote) {
-            var ns = client.resource(new NamespaceBuilder()
-                            .withNewMetadata()
-                            .withGenerateName("rcloneremote-test-")
-                            .endMetadata()
-                            .build())
-                    .create();
-            remote.getMetadata().setNamespace(ns.getMetadata().getName());
-            return ns.getMetadata().getName();
+            var namespace = freshNamespace();
+            remote.getMetadata().setNamespace(namespace);
+            return namespace;
         }
+        return operatorNamespace();
+    }
+
+    private String freshNamespace() {
+        return client.resource(new NamespaceBuilder()
+                        .withNewMetadata()
+                        .withGenerateName("rcloneremote-test-")
+                        .endMetadata()
+                        .build())
+                .create()
+                .getMetadata()
+                .getName();
+    }
+
+    /** The operator namespace, created if needed. */
+    private String operatorNamespace() {
         client.resource(new NamespaceBuilder()
                         .withNewMetadata()
                         .withName(config.operatorNamespace())
@@ -283,6 +331,19 @@ class RemoteReconcilerApiServerTest {
                         .build())
                 .serverSideApply();
         return config.operatorNamespace();
+    }
+
+    private void createSecret(String namespace, String name, List<String> keys) {
+        var data = new LinkedHashMap<String, String>();
+        keys.forEach(key -> data.put(key, "value of " + key));
+        client.resource(new SecretBuilder()
+                        .withNewMetadata()
+                        .withNamespace(namespace)
+                        .withName(name)
+                        .endMetadata()
+                        .withStringData(data)
+                        .build())
+                .create();
     }
 
     /** Waits until the Ready condition exists and satisfies {@code done}, and returns it. */
