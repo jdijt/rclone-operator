@@ -15,20 +15,27 @@
  */
 package eu.derfniw.rco.controller;
 
+import static eu.derfniw.rco.testsupport.Remotes.cluster;
+import static eu.derfniw.rco.testsupport.Remotes.crypt;
+import static eu.derfniw.rco.testsupport.Remotes.namespaced;
+import static eu.derfniw.rco.testsupport.Remotes.ref;
+import static eu.derfniw.rco.testsupport.Remotes.s3;
+import static eu.derfniw.rco.testsupport.Remotes.sftp;
+import static eu.derfniw.rco.testsupport.Remotes.template;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.params.provider.Arguments.argumentSet;
 
+import eu.derfniw.rco.OperatorConfig;
 import eu.derfniw.rco.api.v1alpha1.BackendType;
-import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
-import eu.derfniw.rco.api.v1alpha1.TemplateBackend;
 import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import io.fabric8.kubernetes.api.model.Condition;
+import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
-import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
+import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.test.common.ResourceArg;
@@ -38,6 +45,10 @@ import jakarta.inject.Inject;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.SequencedMap;
+import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,8 +57,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * The running operator against a real API server: the Ready condition is written, and follows spec changes. Runs
- * without the webhooks, so specs the webhook would reject can be stored.
+ * The running operator against a real API server: the Ready condition is written, and follows spec changes and the
+ * referenced Secrets. Runs without the webhooks, so specs the webhook would reject can be stored.
  */
 @QuarkusTest
 @WithTestResource(
@@ -61,11 +72,35 @@ class RemoteReconcilerApiServerTest {
     @Inject
     KubernetesClient client;
 
+    @Inject
+    OperatorConfig config;
+
     enum Scope {
         NAMESPACED,
-        CLUSTER
+        CLUSTER;
+
+        CustomResource<RCloneRemoteSpec, RCloneRemoteStatus> remote(RCloneRemoteSpec spec) {
+            return this == NAMESPACED ? namespaced(spec) : cluster(spec);
+        }
     }
 
+    /** What exists of the Secret a remote refers to when the remote is created. */
+    enum SecretState {
+        /** No Secret of that name: every reference is unresolved. */
+        SECRET_MISSING,
+        /** The Secret exists without the key of the backend's first reference: only that reference is unresolved. */
+        KEY_MISSING,
+        /** The Secret has every referenced key. */
+        PRESENT
+    }
+
+    /** A spec and its Secret references: field path to Secret key, in declaration order. */
+    private record SpecWithRefs(RCloneRemoteSpec spec, SequencedMap<String, String> keysByField) {}
+
+    /**
+     * Spec validation alone, per scope: a template remote without Secret references that passes or fails the
+     * validator.
+     */
     static Stream<Arguments> statusCases() {
         return Stream.of(Scope.values())
                 .flatMap(scope -> Stream.of(
@@ -83,7 +118,9 @@ class RemoteReconcilerApiServerTest {
     void statusReflectsValidation(Scope scope, String template, String wantStatus, String wantReason) {
         // The API server stores lastTransitionTime in whole seconds.
         var creation = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-        var created = client.resource(newRemote(scope, template)).create();
+        var remote = scope.remote(template(t -> t.setTemplate(template)));
+        placeInTestNamespace(remote);
+        var created = client.resource(remote).create();
 
         var ready = awaitReady(created, c -> true);
         assertThat(ready.getStatus()).isEqualTo(wantStatus);
@@ -97,7 +134,9 @@ class RemoteReconcilerApiServerTest {
     @ParameterizedTest
     @EnumSource(Scope.class)
     void conditionFollowsSpecUpdate(Scope scope) {
-        var created = client.resource(newRemote(scope, VALID_TEMPLATE)).create();
+        var remote = scope.remote(template(t -> t.setTemplate(VALID_TEMPLATE)));
+        placeInTestNamespace(remote);
+        var created = client.resource(remote).create();
         assertThat(awaitReady(created, c -> true).getStatus()).isEqualTo("True");
 
         var current = client.resource(created).get();
@@ -112,30 +151,138 @@ class RemoteReconcilerApiServerTest {
         assertThat(client.resource(updated).get().getStatus().getConditions()).hasSize(1);
     }
 
-    private CustomResource<RCloneRemoteSpec, RCloneRemoteStatus> newRemote(Scope scope, String template) {
-        var spec = new RCloneRemoteSpec();
-        spec.setType(BackendType.TEMPLATE);
-        spec.setTemplate(new TemplateBackend(template, null));
+    /**
+     * Secret resolution: every scope × backend × {@link SecretState}. Each spec passes validation and sets every Secret
+     * reference of its backend, so only the Secret decides the outcome.
+     */
+    static Stream<Arguments> secretRefCases() {
+        return Stream.of(Scope.values())
+                .flatMap(scope -> Stream.of(BackendType.values()).flatMap(type -> Stream.of(SecretState.values())
+                        .map(state -> argumentSet(scope + " " + type + " " + state, scope, type, state))));
+    }
 
-        CustomResource<RCloneRemoteSpec, RCloneRemoteStatus> remote;
-        var metadata = new ObjectMetaBuilder();
-        if (scope == Scope.NAMESPACED) {
+    // Every Secret reference of every backend must resolve to an existing Secret and key.
+    @ParameterizedTest
+    @MethodSource("secretRefCases")
+    void statusReflectsSecretRefs(Scope scope, BackendType type, SecretState state) {
+        // Random, as the operator namespace is shared by all tests.
+        var secretName = "test-secret-" + UUID.randomUUID();
+        var withRefs = specWithSecretRefs(type, secretName);
+        var remote = scope.remote(withRefs.spec());
+        var namespace = placeInTestNamespace(remote);
+        var firstRef = withRefs.keysByField().firstEntry();
+
+        // Created before the remote, so the outcome doesn't depend on watching Secrets.
+        if (state != SecretState.SECRET_MISSING) {
+            var data = new LinkedHashMap<String, String>();
+            withRefs.keysByField().values().forEach(key -> data.put(key, "value of " + key));
+            if (state == SecretState.KEY_MISSING) {
+                data.remove(firstRef.getValue());
+            }
+            client.resource(new SecretBuilder()
+                            .withNewMetadata()
+                            .withNamespace(namespace)
+                            .withName(secretName)
+                            .endMetadata()
+                            .withStringData(data)
+                            .build())
+                    .create();
+        }
+        var created = client.resource(remote).create();
+
+        var ready = awaitReady(created, c -> true);
+        switch (state) {
+            case PRESENT -> {
+                assertThat(ready.getStatus()).isEqualTo("True");
+                assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_VALID);
+            }
+            case SECRET_MISSING -> {
+                assertThat(ready.getStatus()).isEqualTo("False");
+                assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_SECRET_NOT_FOUND);
+                assertThat(ready.getMessage())
+                        .contains(secretName)
+                        .contains(withRefs.keysByField().sequencedKeySet());
+            }
+            case KEY_MISSING -> {
+                assertThat(ready.getStatus()).isEqualTo("False");
+                assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_SECRET_NOT_FOUND);
+                assertThat(ready.getMessage()).contains(firstRef.getKey(), firstRef.getValue());
+                // One by one: doesNotContain rejects an empty list, and template has a single reference.
+                withRefs.keysByField().sequencedKeySet().stream()
+                        .skip(1)
+                        .forEach(field -> assertThat(ready.getMessage()).doesNotContain(field));
+            }
+        }
+    }
+
+    /**
+     * A spec for {@code type} with every Secret reference of its backend set, each to its own key of the Secret
+     * {@code secretName}.
+     */
+    private static SpecWithRefs specWithSecretRefs(BackendType type, String secretName) {
+        var keysByField = new LinkedHashMap<String, String>();
+        var spec =
+                switch (type) {
+                    case SFTP -> {
+                        keysByField.put("spec.sftp.passwordRef", "password");
+                        keysByField.put("spec.sftp.privateKeyRef", "privateKey");
+                        keysByField.put("spec.sftp.privateKeyPassphraseRef", "privateKeyPassphrase");
+                        yield sftp(s -> {
+                            s.setPasswordRef(ref(secretName, "password"));
+                            s.setPrivateKeyRef(ref(secretName, "privateKey"));
+                            s.setPrivateKeyPassphraseRef(ref(secretName, "privateKeyPassphrase"));
+                        });
+                    }
+                    case S3 -> {
+                        keysByField.put("spec.s3.accessKeyIDRef", "accessKeyID");
+                        keysByField.put("spec.s3.secretAccessKeyRef", "secretAccessKey");
+                        yield s3(s -> {
+                            s.setAccessKeyIDRef(ref(secretName, "accessKeyID"));
+                            s.setSecretAccessKeyRef(ref(secretName, "secretAccessKey"));
+                        });
+                    }
+                    case CRYPT -> {
+                        keysByField.put("spec.crypt.passwordRef", "password");
+                        keysByField.put("spec.crypt.saltRef", "salt");
+                        // The wrapped remote isn't checked here.
+                        yield crypt(s -> {
+                            s.setPasswordRef(ref(secretName, "password"));
+                            s.setSaltRef(ref(secretName, "salt"));
+                        });
+                    }
+                    case TEMPLATE -> {
+                        keysByField.put("spec.template.inputs[password]", "password");
+                        yield template(t -> {
+                            t.setTemplate(":webdav,url=https://example.com,pass=${password}:");
+                            t.setInputs(Map.of("password", ref(secretName, "password")));
+                        });
+                    }
+                };
+        return new SpecWithRefs(spec, keysByField);
+    }
+
+    /**
+     * Gives a namespaced remote a fresh namespace, so tests don't collide on names, and returns the namespace its
+     * Secrets are resolved in: that one, or the operator namespace for a cluster remote (created if needed).
+     */
+    private String placeInTestNamespace(HasMetadata remote) {
+        if (remote instanceof RCloneRemote) {
             var ns = client.resource(new NamespaceBuilder()
                             .withNewMetadata()
                             .withGenerateName("rcloneremote-test-")
                             .endMetadata()
                             .build())
                     .create();
-            remote = new RCloneRemote();
-            metadata.withNamespace(ns.getMetadata().getName()).withName("test-rcloneremote");
-        } else {
-            // Cluster-scoped names are shared by all tests, so the name is generated.
-            remote = new RCloneClusterRemote();
-            metadata.withGenerateName("test-rcloneclusterremote-");
+            remote.getMetadata().setNamespace(ns.getMetadata().getName());
+            return ns.getMetadata().getName();
         }
-        remote.setMetadata(metadata.build());
-        remote.setSpec(spec);
-        return remote;
+        client.resource(new NamespaceBuilder()
+                        .withNewMetadata()
+                        .withName(config.operatorNamespace())
+                        .endMetadata()
+                        .build())
+                .serverSideApply();
+        return config.operatorNamespace();
     }
 
     /** Waits until the Ready condition exists and satisfies {@code done}, and returns it. */

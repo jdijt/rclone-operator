@@ -15,27 +15,29 @@
  */
 package eu.derfniw.rco.webhook;
 
+import static eu.derfniw.rco.testsupport.Remotes.cluster;
+import static eu.derfniw.rco.testsupport.Remotes.crypt;
+import static eu.derfniw.rco.testsupport.Remotes.namespaced;
+import static eu.derfniw.rco.testsupport.Remotes.ref;
+import static eu.derfniw.rco.testsupport.Remotes.s3;
+import static eu.derfniw.rco.testsupport.Remotes.sftp;
+import static eu.derfniw.rco.testsupport.Remotes.spec;
+import static eu.derfniw.rco.testsupport.Remotes.template;
+import static eu.derfniw.rco.testsupport.Remotes.with;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.params.provider.Arguments.argumentSet;
 
 import eu.derfniw.rco.api.v1alpha1.BackendType;
-import eu.derfniw.rco.api.v1alpha1.CryptBackend;
-import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
 import eu.derfniw.rco.api.v1alpha1.RemoteRef;
-import eu.derfniw.rco.api.v1alpha1.S3Backend;
-import eu.derfniw.rco.api.v1alpha1.SecretKeyRef;
-import eu.derfniw.rco.api.v1alpha1.SftpBackend;
-import eu.derfniw.rco.api.v1alpha1.TemplateBackend;
 import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResourceBuilder;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
-import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
@@ -47,7 +49,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -72,27 +73,31 @@ class RemoteAdmissionTest {
 
     static Stream<Arguments> acceptedCases() {
         return Stream.of(
-                argumentSet("namespaced template", namespaced(template("valid"))),
-                argumentSet("cluster template", cluster(template("valid"))),
-                argumentSet(
-                        "template with declared input",
-                        namespaced(templateWithInputs(
-                                ":webdav,pass=${password}:", Map.of("password", ref("webdav", "password"))))),
-                argumentSet("sftp with password", namespaced(sftp(s -> s.setPasswordRef(ref("sftp", "password"))))),
+                argumentSet("namespaced template", namespaced(template(t -> t.setTemplate("valid")))),
+                argumentSet("cluster template", cluster(template(t -> t.setTemplate("valid")))),
+                argumentSet("template with declared input", namespaced(template(t -> {
+                    t.setTemplate(":webdav,pass=${password}:");
+                    t.setInputs(Map.of("password", ref("webdav", "password")));
+                }))),
+                argumentSet("sftp with password", namespaced(sftp(s -> {}))),
                 argumentSet("sftp with private key and passphrase", namespaced(sftp(s -> {
+                    s.setPasswordRef(null);
                     s.setPrivateKeyRef(ref("sftp", "key"));
                     s.setPrivateKeyPassphraseRef(ref("sftp", "passphrase"));
                 }))),
-                argumentSet("s3 on AWS without endpoint", namespaced(s3("AWS", null))),
-                argumentSet("s3 on Ceph with https endpoint", namespaced(s3("Ceph", "https://s3.example.com"))),
+                argumentSet("s3 on AWS without endpoint", namespaced(s3(s -> {}))),
+                argumentSet("s3 on Ceph with https endpoint", namespaced(s3(s -> {
+                    s.setProvider("Ceph");
+                    s.setEndpoint("https://s3.example.com");
+                }))),
                 // RCloneRemote may refer to either kind; remoteRef.kind defaults to RCloneRemote.
-                argumentSet("namespaced crypt referring to RCloneRemote by default", namespaced(crypt(null))),
                 argumentSet(
-                        "namespaced crypt referring to RCloneClusterRemote",
-                        namespaced(crypt(RemoteRef.Kind.CLUSTER_REMOTE))),
-                argumentSet(
-                        "cluster crypt referring to RCloneClusterRemote",
-                        cluster(crypt(RemoteRef.Kind.CLUSTER_REMOTE))));
+                        "namespaced crypt referring to RCloneRemote by default",
+                        namespaced(crypt(c -> c.getRemoteRef().setKind(null)))),
+                argumentSet("namespaced crypt referring to RCloneClusterRemote", namespaced(crypt(c -> c.getRemoteRef()
+                        .setKind(RemoteRef.Kind.CLUSTER_REMOTE)))),
+                argumentSet("cluster crypt referring to RCloneClusterRemote", cluster(crypt(c -> c.getRemoteRef()
+                        .setKind(RemoteRef.Kind.CLUSTER_REMOTE)))));
     }
 
     @ParameterizedTest
@@ -118,14 +123,11 @@ class RemoteAdmissionTest {
                         "Unsupported value: \"ftp\""),
                 argumentSet(
                         "minLength rejects empty template",
-                        namespaced(template("")),
+                        namespaced(template(t -> t.setTemplate(""))),
                         "should be at least 1 chars long"),
                 argumentSet(
                         "maximum rejects out of range sftp port",
-                        namespaced(sftp(s -> {
-                            s.setPort(70000);
-                            s.setPasswordRef(ref("sftp", "password"));
-                        })),
+                        namespaced(sftp(s -> s.setPort(70000))),
                         "should be less than or equal to 65535"),
 
                 // CEL: type <=> matching backend set.
@@ -147,56 +149,57 @@ class RemoteAdmissionTest {
                         "template must be set if and only if type is template"),
                 argumentSet(
                         "CEL rejects a second backend besides the selected one",
-                        namespaced(with(template("valid"), s -> s.setS3(s3Backend("AWS", null)))),
+                        namespaced(
+                                with(template(t -> {}), s -> s.setS3(s3(b -> {}).getS3()))),
                         "s3 must be set if and only if type is s3"),
 
                 // CEL: sftp credentials.
                 argumentSet(
                         "CEL rejects sftp without password or private key",
-                        namespaced(sftp(s -> {})),
+                        namespaced(sftp(s -> s.setPasswordRef(null))),
                         "one of passwordRef or privateKeyRef must be set"),
                 argumentSet(
                         "CEL rejects sftp passphrase without private key",
-                        namespaced(sftp(s -> {
-                            s.setPasswordRef(ref("sftp", "password"));
-                            s.setPrivateKeyPassphraseRef(ref("sftp", "passphrase"));
-                        })),
+                        namespaced(sftp(s -> s.setPrivateKeyPassphraseRef(ref("sftp", "passphrase")))),
                         "privateKeyPassphrase supplied but no private key used"),
 
                 // CEL: s3 endpoint.
                 argumentSet(
                         "CEL rejects s3 on non-AWS without endpoint",
-                        namespaced(s3("Ceph", null)),
+                        namespaced(s3(s -> s.setProvider("Ceph"))),
                         "Endpoint must be specified for non-aws providers"),
                 argumentSet(
                         "CEL rejects s3 endpoint with non-http scheme",
-                        namespaced(s3("Ceph", "ftp://s3.example.com")),
+                        namespaced(s3(s -> {
+                            s.setProvider("Ceph");
+                            s.setEndpoint("ftp://s3.example.com");
+                        })),
                         "endpoint must be a valid http/https URL"),
 
                 // CEL: RCloneClusterRemote may only refer to RCloneClusterRemote (remoteRef.kind defaults to
                 // RCloneRemote).
                 argumentSet(
                         "CEL rejects cluster crypt referring to RCloneRemote",
-                        cluster(crypt(RemoteRef.Kind.REMOTE)),
+                        cluster(crypt(c -> c.getRemoteRef().setKind(RemoteRef.Kind.REMOTE))),
                         "RCloneClusterRemote can only refer to other RCloneClusterRemotes."),
                 argumentSet(
                         "CEL rejects cluster crypt with defaulted kind",
-                        cluster(crypt(null)),
+                        cluster(crypt(c -> c.getRemoteRef().setKind(null))),
                         "RCloneClusterRemote can only refer to other RCloneClusterRemotes."),
 
                 // Webhook: one rejection per kind proves each webhook is wired; the rules themselves are covered by
                 // RemoteValidatorTest.
                 argumentSet(
                         "webhook rejects namespaced template with undeclared input",
-                        namespaced(template("${missing}")),
+                        namespaced(template(t -> t.setTemplate("${missing}"))),
                         NAMESPACED_DENIED),
                 argumentSet(
                         "webhook rejects cluster template with undeclared input",
-                        cluster(template("${missing}")),
+                        cluster(template(t -> t.setTemplate("${missing}"))),
                         CLUSTER_DENIED),
                 argumentSet(
                         "webhook reports the offending field",
-                        namespaced(template("${missing}")),
+                        namespaced(template(t -> t.setTemplate("${missing}"))),
                         "spec.template.template: Invalid value: \"${missing}\": reference to undeclared field missing"));
     }
 
@@ -213,11 +216,11 @@ class RemoteAdmissionTest {
         return Stream.of(
                 argumentSet(
                         "webhook rejects namespaced update to undeclared input",
-                        namespaced(template("valid")),
+                        namespaced(template(t -> t.setTemplate("valid"))),
                         NAMESPACED_DENIED),
                 argumentSet(
                         "webhook rejects cluster update to undeclared input",
-                        cluster(template("valid")),
+                        cluster(template(t -> t.setTemplate("valid"))),
                         CLUSTER_DENIED));
     }
 
@@ -256,7 +259,9 @@ class RemoteAdmissionTest {
         var created = new ArrayList<HasMetadata>();
         try {
             client.resource(webhooks).delete();
-            for (HasMetadata resource : List.of(namespaced(template("${missing}")), cluster(template("${missing}")))) {
+            for (HasMetadata resource : List.of(
+                    namespaced(template(t -> t.setTemplate("${missing}"))),
+                    cluster(template(t -> t.setTemplate("${missing}"))))) {
                 placeInTestNamespace(resource);
                 // Webhook configuration changes reach the API server's admission chain asynchronously.
                 created.add(await().atMost(Duration.ofSeconds(10))
@@ -270,7 +275,7 @@ class RemoteAdmissionTest {
         }
 
         // Wait until the restored webhooks are in effect.
-        var probe = cluster(template("${missing}"));
+        var probe = cluster(template(t -> t.setTemplate("${missing}")));
         await().atMost(Duration.ofSeconds(10)).until(() -> {
             try {
                 client.resource(probe).dryRun().create();
@@ -298,70 +303,5 @@ class RemoteAdmissionTest {
                         .build())
                 .create();
         resource.getMetadata().setNamespace(ns.getMetadata().getName());
-    }
-
-    private static RCloneRemote namespaced(RCloneRemoteSpec spec) {
-        var remote = new RCloneRemote();
-        remote.setMetadata(new ObjectMetaBuilder().withName("remote").build());
-        remote.setSpec(spec);
-        return remote;
-    }
-
-    private static RCloneClusterRemote cluster(RCloneRemoteSpec spec) {
-        var remote = new RCloneClusterRemote();
-        remote.setMetadata(new ObjectMetaBuilder().withGenerateName("remote-").build());
-        remote.setSpec(spec);
-        return remote;
-    }
-
-    private static RCloneRemoteSpec spec(BackendType type) {
-        var spec = new RCloneRemoteSpec();
-        spec.setType(type);
-        return spec;
-    }
-
-    private static RCloneRemoteSpec with(RCloneRemoteSpec spec, Consumer<RCloneRemoteSpec> change) {
-        change.accept(spec);
-        return spec;
-    }
-
-    private static RCloneRemoteSpec template(String template) {
-        return templateWithInputs(template, null);
-    }
-
-    private static RCloneRemoteSpec templateWithInputs(String template, Map<String, SecretKeyRef> inputs) {
-        return with(spec(BackendType.TEMPLATE), s -> s.setTemplate(new TemplateBackend(template, inputs)));
-    }
-
-    private static RCloneRemoteSpec sftp(Consumer<SftpBackend> change) {
-        var sftp = new SftpBackend();
-        sftp.setHost("host");
-        sftp.setUser("user");
-        change.accept(sftp);
-        return with(spec(BackendType.SFTP), s -> s.setSftp(sftp));
-    }
-
-    private static S3Backend s3Backend(String provider, String endpoint) {
-        var s3 = new S3Backend();
-        s3.setProvider(provider);
-        s3.setEndpoint(endpoint);
-        s3.setAccessKeyIDRef(ref("s3", "id"));
-        s3.setSecretAccessKeyRef(ref("s3", "secret"));
-        return s3;
-    }
-
-    private static RCloneRemoteSpec s3(String provider, String endpoint) {
-        return with(spec(BackendType.S3), s -> s.setS3(s3Backend(provider, endpoint)));
-    }
-
-    private static RCloneRemoteSpec crypt(RemoteRef.Kind kind) {
-        var crypt = new CryptBackend();
-        crypt.setRemoteRef(new RemoteRef(kind, "wrapped"));
-        crypt.setPasswordRef(ref("crypt", "password"));
-        return with(spec(BackendType.CRYPT), s -> s.setCrypt(crypt));
-    }
-
-    private static SecretKeyRef ref(String name, String key) {
-        return new SecretKeyRef(name, key);
     }
 }
