@@ -27,6 +27,13 @@ public class RCloneSyncStatus {
     /** Condition type: the sync can run when its trigger fires. */
     public static final String READY = "Ready";
 
+    public static final String REASON_VALID = "Valid";
+    public static final String REASON_INVALID = "InvalidSpec";
+    /** A remote the sync uses, directly or wrapped by a crypt remote, does not exist. */
+    public static final String REASON_REMOTE_NOT_FOUND = "RemoteNotFound";
+    /** A remote the sync uses, directly or wrapped by a crypt remote, is not Ready. */
+    public static final String REASON_REMOTE_NOT_READY = "RemoteNotReady";
+
     /**
      * The current state of the sync. Each condition has a unique type.
      *
@@ -41,8 +48,7 @@ public class RCloneSyncStatus {
     private String lastScheduleTime;
 
     /**
-     * When the trigger creates the next run (RFC 3339). For an interval trigger this is how to see the time the operator
-     * chose. Unset while the sync is suspended.
+     * When the trigger creates the next run (RFC 3339). Unset while the sync is suspended or not Ready.
      */
     private String nextScheduleTime;
 

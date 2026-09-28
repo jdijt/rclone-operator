@@ -13,12 +13,11 @@ spec:
       kind: RCloneClusterRemote
       name: rcloneclusterremote-sample
     path: /tmp/photos-backup
-  # Once a day, at a time the operator picks for this sync (see status.nextScheduleTime). For a fixed time, use
-  #   trigger: {type: cron, cron: {expression: "0 3 * * *", timeZone: Europe/Amsterdam}}
+  # Every day at midnight UTC; a cron expression such as "0 3 * * *" works too.
   trigger:
-    type: interval
-    interval:
-      every: daily
+    type: cron
+    cron:
+      expression: "@daily"
   options:
     transfers: 2
     filters:

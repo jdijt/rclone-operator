@@ -17,16 +17,14 @@ package eu.derfniw.rco.api.v1alpha1;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import eu.derfniw.rco.sync.ValidCron;
-import eu.derfniw.rco.sync.ValidTimeZone;
 import eu.derfniw.rco.validation.Reason;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.Size;
 import io.fabric8.generator.annotation.ValidationRule;
 
 /**
- * Runs a sync on a cron schedule, as a Kubernetes CronJob would. A run that is due while the previous one is still in
- * progress is skipped. For "once a day" and similar, prefer an interval trigger: @daily runs every such sync at
- * midnight, an interval spreads them over the day.
+ * Runs a sync on a cron schedule, as a Kubernetes CronJob would. The sync's concurrencyPolicy decides what happens
+ * when a run is due while another one is still in progress.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class CronTrigger {
@@ -39,7 +37,8 @@ public class CronTrigger {
      * <p>Or one of the Kubernetes CronJob macros: @yearly and @annually (0 0 1 1 *), @monthly (0 0 1 * *), @weekly (0 0
      * * * 0), @daily and @midnight (0 0 * * *), @hourly (0 * * * *).
      *
-     * <p>Differences from CronJob schedules: no names (use numbers) and no ?, and 7 is also Sunday.
+     * <p>Evaluated in UTC. Differences from CronJob schedules: no time zone, no names (use numbers) and no ?, and 7 is
+     * also Sunday.
      */
     @Required
     @Size(min = 1, max = 128)
@@ -50,11 +49,6 @@ public class CronTrigger {
                     + " @annually, @monthly, @weekly, @daily, @midnight and @hourly")
     @ValidCron(payload = Reason.Invalid.class)
     private String expression;
-
-    /** IANA time zone name (e.g. Europe/Amsterdam) the expression is evaluated in. Unset means UTC. */
-    @Size(min = 1, max = 64)
-    @ValidTimeZone(payload = Reason.Invalid.class)
-    private String timeZone;
 
     public CronTrigger() {}
 
@@ -68,13 +62,5 @@ public class CronTrigger {
 
     public void setExpression(String expression) {
         this.expression = expression;
-    }
-
-    public String getTimeZone() {
-        return timeZone;
-    }
-
-    public void setTimeZone(String timeZone) {
-        this.timeZone = timeZone;
     }
 }

@@ -31,6 +31,7 @@ import eu.derfniw.rco.api.v1alpha1.BackendType;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
+import eu.derfniw.rco.api.v1alpha1.RemoteRef;
 import eu.derfniw.rco.api.v1alpha1.SecretKeyRef;
 import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import io.fabric8.kubernetes.api.model.Condition;
@@ -72,6 +73,8 @@ class RemoteReconcilerApiServerTest {
 
     private static final String VALID_TEMPLATE = "A valid template";
     private static final String INVALID_TEMPLATE = "With a ${field} that has no input";
+    /** The Ready RCloneClusterRemote the crypt remotes of {@link #statusReflectsSecretRefs} wrap. */
+    private static final String CRYPT_FIXTURE_WRAPPED = "crypt-fixture-wrapped";
 
     @Inject
     KubernetesClient client;
@@ -85,6 +88,11 @@ class RemoteReconcilerApiServerTest {
 
         CustomResource<RCloneRemoteSpec, RCloneRemoteStatus> remote(RCloneRemoteSpec spec) {
             return this == NAMESPACED ? namespaced(spec) : cluster(spec);
+        }
+
+        /** The kind a remoteRef names a remote of this scope by. */
+        RemoteRef.Kind kind() {
+            return this == NAMESPACED ? RemoteRef.Kind.REMOTE : RemoteRef.Kind.CLUSTER_REMOTE;
         }
     }
 
@@ -192,6 +200,10 @@ class RemoteReconcilerApiServerTest {
             }
             case PRESENT -> createSecret(namespace, secretName, keys);
         }
+        if (type == BackendType.CRYPT) {
+            // Secrets are checked first, so only with every Secret present does the wrapped remote matter.
+            ensureReadyClusterRemote(CRYPT_FIXTURE_WRAPPED);
+        }
         var created = client.resource(remote).create();
 
         var ready = awaitReady(created, c -> true);
@@ -217,6 +229,92 @@ class RemoteReconcilerApiServerTest {
                         .forEach(field -> assertThat(ready.getMessage()).doesNotContain(field));
             }
         }
+    }
+
+    /**
+     * A crypt remote is only Ready while the remote it wraps is, and follows it: from missing, to not Ready, to Ready.
+     * Namespaced crypt remotes may wrap either kind; cluster crypt remotes only cluster remotes.
+     */
+    static Stream<Arguments> wrappingCases() {
+        return Stream.of(
+                argumentSet("namespaced wraps namespaced", Scope.NAMESPACED, Scope.NAMESPACED),
+                argumentSet("namespaced wraps cluster", Scope.NAMESPACED, Scope.CLUSTER),
+                argumentSet("cluster wraps cluster", Scope.CLUSTER, Scope.CLUSTER));
+    }
+
+    @ParameterizedTest
+    @MethodSource("wrappingCases")
+    void cryptFollowsTheWrappedRemote(Scope cryptScope, Scope wrappedScope) {
+        var secretName = "test-secret-" + UUID.randomUUID();
+        var wrappedName = "wrapped-" + UUID.randomUUID();
+        var crypt = cryptScope.remote(crypt(c -> {
+            c.setRemoteRef(new RemoteRef(wrappedScope.kind(), wrappedName));
+            c.setPasswordRef(ref(secretName, "password"));
+        }));
+        createSecret(placeInTestNamespace(crypt), secretName, List.of("password"));
+        var created = client.resource(crypt).create();
+
+        var notFound = awaitReady(created, c -> true);
+        assertThat(notFound.getStatus()).isEqualTo("False");
+        assertThat(notFound.getReason()).isEqualTo(RCloneRemoteStatus.REASON_REMOTE_NOT_FOUND);
+        assertThat(notFound.getMessage()).contains("spec.crypt.remoteRef", wrappedName);
+
+        var wrapped = wrappedScope.remote(template(t -> t.setTemplate(INVALID_TEMPLATE)));
+        wrapped.getMetadata().setGenerateName(null);
+        wrapped.getMetadata().setName(wrappedName);
+        if (wrappedScope == Scope.NAMESPACED) {
+            wrapped.getMetadata().setNamespace(crypt.getMetadata().getNamespace());
+        }
+        client.resource(wrapped).create();
+
+        var notReady = awaitReady(created, c -> RCloneRemoteStatus.REASON_REMOTE_NOT_READY.equals(c.getReason()));
+        assertThat(notReady.getStatus()).isEqualTo("False");
+        assertThat(notReady.getMessage()).contains("spec.crypt.remoteRef", wrappedName);
+
+        client.resource(wrapped).unlock().edit(r -> {
+            r.getSpec().getTemplate().setTemplate(VALID_TEMPLATE);
+            return r;
+        });
+
+        assertThat(awaitReady(created, c -> "True".equals(c.getStatus())).getReason())
+                .isEqualTo(RCloneRemoteStatus.REASON_VALID);
+    }
+
+    /** Crypt remotes that wrap each other can never be Ready, and say why. */
+    @ParameterizedTest
+    @EnumSource(Scope.class)
+    void cryptCycleIsNotReady(Scope scope) {
+        var secretName = "test-secret-" + UUID.randomUUID();
+        var first = "crypt-a-" + UUID.randomUUID();
+        var second = "crypt-b-" + UUID.randomUUID();
+        var a = cryptWrapping(scope, first, second, secretName);
+        var b = cryptWrapping(scope, second, first, secretName);
+        var namespace = placeInTestNamespace(a);
+        if (scope == Scope.NAMESPACED) {
+            b.getMetadata().setNamespace(namespace);
+        }
+        createSecret(namespace, secretName, List.of("password"));
+        var createdA = client.resource(a).create();
+        var createdB = client.resource(b).create();
+
+        for (var created : List.of(createdA, createdB)) {
+            var ready = awaitReady(created, c -> c.getMessage().contains("cycle"));
+            assertThat(ready.getStatus()).isEqualTo("False");
+            assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_REMOTE_NOT_READY);
+            assertThat(ready.getMessage()).contains(first, second);
+        }
+    }
+
+    /** A crypt remote {@code name} of {@code scope} wrapping the remote {@code wrapped} of the same scope. */
+    private static CustomResource<RCloneRemoteSpec, RCloneRemoteStatus> cryptWrapping(
+            Scope scope, String name, String wrapped, String secretName) {
+        var remote = scope.remote(crypt(c -> {
+            c.setRemoteRef(new RemoteRef(scope.kind(), wrapped));
+            c.setPasswordRef(ref(secretName, "password"));
+        }));
+        remote.getMetadata().setGenerateName(null);
+        remote.getMetadata().setName(name);
+        return remote;
     }
 
     /**
@@ -281,8 +379,8 @@ class RemoteReconcilerApiServerTest {
                     case CRYPT -> {
                         keysByField.put("spec.crypt.passwordRef", "secret-key-1");
                         keysByField.put("spec.crypt.saltRef", "secret-key-2");
-                        // The wrapped remote isn't checked here.
                         yield crypt(s -> {
+                            s.setRemoteRef(new RemoteRef(RemoteRef.Kind.CLUSTER_REMOTE, CRYPT_FIXTURE_WRAPPED));
                             s.setPasswordRef(ref(secretName, "secret-key-1"));
                             s.setSaltRef(ref(secretName, "secret-key-2"));
                         });
@@ -331,6 +429,14 @@ class RemoteReconcilerApiServerTest {
                         .build())
                 .serverSideApply();
         return config.operatorNamespace();
+    }
+
+    /** Creates the RCloneClusterRemote {@code name} unless it exists, and waits until it is Ready. */
+    private void ensureReadyClusterRemote(String name) {
+        var remote = cluster(template(t -> t.setTemplate(VALID_TEMPLATE)));
+        remote.getMetadata().setGenerateName(null);
+        remote.getMetadata().setName(name);
+        awaitReady(client.resource(remote).serverSideApply(), c -> "True".equals(c.getStatus()));
     }
 
     private void createSecret(String namespace, String name, List<String> keys) {

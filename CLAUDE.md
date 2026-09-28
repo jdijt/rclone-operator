@@ -14,10 +14,9 @@ Built with Quarkus and the Java Operator SDK (JOSDK) via the `quarkus-operator-s
   free-form rclone flag map, so the limiter stays in control. Each triggered run is an `RCloneSyncRun` in the sync's
   namespace, owned by the sync and named after the scheduled time (so it is never created twice); creating one by hand
   is a manual run. The sync controller only creates runs; the run controller executes them and records statistics.
-- **Triggers:** `interval` (hourly/daily/weekly/monthly) runs at a moment within the period derived from a hash of the
-  sync's namespace and name, so syncs spread out instead of all starting at once; `status.nextScheduleTime` shows it.
-  `cron` follows Kubernetes CronJob schedules, except no names or `?`, and 7 is also Sunday. `CronSchedules` defines
-  the cron-utils definition (UNIX plus the macros); supporting `?` there would switch cron-utils to Quartz day matching.
+- **Triggers:** `cron` only for now (`trigger` stays a union for other kinds), evaluated in UTC. It follows Kubernetes
+  CronJob schedules, except no time zone, no names or `?`, and 7 is also Sunday. `CronSchedules` defines the cron-utils
+  definition (UNIX plus the macros); supporting `?` there would switch cron-utils to Quartz day matching.
 - **Execution model:** a run executes as a Kubernetes Job, in the run's namespace, or in the operator namespace if any
   remote it uses (following crypt wrapping) is an RCloneClusterRemote. Credentials reach the Job through a per-run
   Secret next to it that the operator renders from the remotes' Secrets; never as values in the Job spec, and cluster
@@ -44,7 +43,7 @@ Package root `eu.derfniw.rco`:
 - `remote` — Jakarta constraints for remote checks CRD markers can't express (`@SelectedBackendPresent`,
   `@DeclaredPlaceholders`, plus `@NotNull`/`@NotBlank` on the model), and `RemoteValidator` (injected into the
   reconcilers and the webhook).
-- `sync` — `SyncValidator` and its constraints (`@ValidCron`, `@ValidTimeZone`), and `CronSchedules`, the parser for
+- `sync` — `SyncValidator` and its constraints (`@ValidCron`), and `CronSchedules`, the parser for
   cron triggers.
 - `controller` — reconcilers. `AbstractRemoteReconciler` holds the logic shared by both remote kinds.
 - `webhook` — validating admission webhooks, one plain JAX-RS resource (`ValidationResource`) on fabric8's
