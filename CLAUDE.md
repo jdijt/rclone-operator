@@ -73,7 +73,9 @@ Package root `eu.derfniw.rco`:
 - The running operator writes status concurrently with tests: update with `unlock().edit(...)` or re-fetch first.
 - `ArchitectureTest` (ArchUnit, plain JUnit) enforces the layering: `controller` and `webhook` are entry points nothing
   depends on; `sync`, `remote` and `validation` are used only by them, except that the model may use their constraint
-  annotations and payloads.
+  annotations and payloads. It also limits where framework and Kubernetes types appear: JOSDK only in `controller`;
+  the Kubernetes client only in the entry points (elsewhere just `CustomResource`); the Kubernetes API model only in
+  the model and the entry points; CRD generator annotations only in the model.
 - e2e tests against kind (image build, cert-manager, metrics) are not ported yet.
 
 ## Conventions

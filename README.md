@@ -34,9 +34,9 @@ It is built with [Quarkus](https://quarkus.io) and the [Java Operator SDK](https
   delete, finalizers), while the operator only needs get/list/watch plus get/update/patch on status. `@RBACRule` and
   overrides in `src/main/kubernetes/kubernetes.yml` only add rules. Check newer extension versions or raise it
   upstream.
-- [ ] More ArchUnit rules (`ArchitectureTest` has the layering): keep the scheduler/limiter, stats and validation code
-  free of JOSDK and Kubernetes client types. Revisit whether the model's use of the logic packages' constraint
-  annotations and payloads (allowed by the layering rule) should stay.
+- [ ] `ArchitectureTest`: add the scheduler/limiter and stats packages to the rules as they appear, and revisit whether
+  the model's use of the logic packages' constraint annotations and payloads (allowed by the layering rule) should
+  stay.
 
 ## Cluster dependencies
 

@@ -15,18 +15,22 @@
  */
 package eu.derfniw.rco;
 
+import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.ANNOTATIONS;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.equivalentTo;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import io.fabric8.kubernetes.client.CustomResource;
 import jakarta.validation.Payload;
 
-/** The package layering, on production classes only. */
+/** The package layering and where framework and Kubernetes types may be used, on production classes only. */
 @AnalyzeClasses(packages = "eu.derfniw.rco", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
 
@@ -50,4 +54,43 @@ class ArchitectureTest {
             .mayOnlyBeAccessedByLayers("Entry")
             .ignoreDependency(resideInAPackage("..api.v1alpha1.."), ANNOTATIONS)
             .ignoreDependency(resideInAPackage("..api.v1alpha1.."), assignableTo(Payload.class));
+
+    /** Only reconcilers deal with the operator framework. */
+    @ArchTest
+    static final ArchRule operatorFramework = noClasses()
+            .that()
+            .resideOutsideOfPackage("..rco.controller..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage("io.javaoperatorsdk..", "io.quarkiverse.operatorsdk..");
+
+    /** Only the entry points talk to the API server; elsewhere CustomResource is the one client type allowed. */
+    @ArchTest
+    static final ArchRule kubernetesClient = noClasses()
+            .that()
+            .resideOutsideOfPackages("..rco.controller..", "..rco.webhook..")
+            .should()
+            .dependOnClassesThat(
+                    resideInAPackage("io.fabric8.kubernetes.client..").and(not(equivalentTo(CustomResource.class))));
+
+    /** The Kubernetes API model belongs to the CRD model and the entry points, not the logic packages. */
+    @ArchTest
+    static final ArchRule kubernetesModel = noClasses()
+            .that()
+            .resideOutsideOfPackages("..rco.api.v1alpha1..", "..rco.controller..", "..rco.webhook..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("io.fabric8.kubernetes.api.model..");
+
+    /** CRD generator annotations only describe the CRD model. */
+    @ArchTest
+    static final ArchRule crdAnnotations = noClasses()
+            .that()
+            .resideOutsideOfPackage("..rco.api.v1alpha1..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage(
+                    "io.fabric8.generator.annotation..",
+                    "io.fabric8.crd.generator.annotation..",
+                    "io.fabric8.kubernetes.model.annotation..");
 }
