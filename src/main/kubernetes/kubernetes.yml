@@ -60,3 +60,18 @@ webhooks:
         apiVersions: [v1alpha1]
         operations: [CREATE, UPDATE]
         resources: [rcloneclusterremotes]
+  - name: vrclonesync.rco.frozenbits.se
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: rclone-operator
+        namespace: rclone-operator
+        path: /webhooks/validate/rclonesyncs
+        port: 443
+    rules:
+      - apiGroups: [rco.frozenbits.se]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [rclonesyncs]

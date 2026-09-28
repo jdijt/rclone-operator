@@ -1,0 +1,8 @@
+apiVersion: rco.frozenbits.se/v1alpha1
+kind: RCloneSyncRun
+metadata:
+  # The sync's trigger creates runs by itself; creating one by hand runs the sync once, now.
+  generateName: rclonesync-sample-manual-
+spec:
+  syncRef:
+    name: rclonesync-sample

@@ -1,0 +1,28 @@
+apiVersion: rco.frozenbits.se/v1alpha1
+kind: RCloneSync
+metadata:
+  name: rclonesync-sample
+spec:
+  # Makes the destination an exact copy of the source: files missing from the source are deleted there.
+  source:
+    remoteRef:
+      name: rcloneremote-sample
+    path: photos
+  destination:
+    remoteRef:
+      kind: RCloneClusterRemote
+      name: rcloneclusterremote-sample
+    path: /tmp/photos-backup
+  # Once a day, at a time the operator picks for this sync (see status.nextScheduleTime). For a fixed time, use
+  #   trigger: {type: cron, cron: {expression: "0 3 * * *", timeZone: Europe/Amsterdam}}
+  trigger:
+    type: interval
+    interval:
+      every: daily
+  options:
+    transfers: 2
+    filters:
+      - action: exclude
+        pattern: "*.tmp"
+      - action: exclude
+        pattern: ".thumbnails/**"
