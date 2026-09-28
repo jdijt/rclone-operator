@@ -6,6 +6,7 @@
     <version>1.0.0-SNAPSHOT</version>
 
     <properties>
+        <archunit.version>1.4.1</archunit.version>
         <assertj.version>3.27.7</assertj.version>
         <compiler-plugin.version>3.16.0</compiler-plugin.version>
         <kube-api-test.version>8.0.0</kube-api-test.version>
@@ -94,6 +95,12 @@
         <dependency>
             <groupId>io.smallrye.certs</groupId>
             <artifactId>smallrye-certificate-generator</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
