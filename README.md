@@ -18,10 +18,10 @@ It is built with [Quarkus](https://quarkus.io) and the [Java Operator SDK](https
   taken from Secrets, validated by CEL rules and an admission webhook. A remote is only Ready once every referenced
   Secret and key exists (checked on reconcile; Secret changes are not watched yet).
 - [x] `RCloneSync`: an rclone sync between two remotes, triggered by an interval (hourly/daily/weekly/monthly, at a
-  time the operator spreads per sync) or a numeric cron expression, with a typed subset of rclone's options (dry run,
-  transfers, checkers, delete mode, filters), and `RCloneSyncRun`: one run of a sync, created by its trigger or by
-  hand. Triggers are validated by CEL rules and an admission webhook (cron ranges, IANA time zone). Only the CRDs
-  exist; nothing runs them yet.
+  time the operator spreads per sync) or a cron expression (as in CronJobs, except no names or `?`, and 7 is also
+  Sunday), with a typed subset of rclone's options (dry run, transfers, checkers, delete mode, filters), and
+  `RCloneSyncRun`: one run of a sync, created by its trigger or by hand. Triggers are validated by CEL rules and an
+  admission webhook (cron ranges, IANA time zone). Only the CRDs exist; nothing runs them yet.
 - [ ] Controller runs the sync on schedule and reports run state via status conditions.
 - [ ] Statistics per run in status: duration, transfer speed, bytes and files transferred, errors.
 - [ ] Prometheus metrics for the same statistics.

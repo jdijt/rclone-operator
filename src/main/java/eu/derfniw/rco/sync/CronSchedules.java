@@ -16,17 +16,54 @@
 package eu.derfniw.rco.sync;
 
 import com.cronutils.model.Cron;
-import com.cronutils.model.CronType;
+import com.cronutils.model.definition.CronDefinition;
 import com.cronutils.model.definition.CronDefinitionBuilder;
 import com.cronutils.parser.CronParser;
 
 /**
- * Parses cron triggers with rclone-operator's cron definition: cron-utils' UNIX type, five numeric fields (minute hour
- * day-of-month month day-of-week, Sunday is 0 or 7). The CRD's CEL rule already rules out names and macros.
+ * Parses cron triggers the way Kubernetes CronJobs interpret their schedules: five numeric fields (minute hour
+ * day-of-month month day-of-week, Sunday is 0 or 7), or one of the macros @yearly, @annually, @monthly, @weekly,
+ * @daily, @midnight and @hourly. The CRD's CEL rule already rules out names and {@code ?}.
  */
 public final class CronSchedules {
 
-    private static final CronParser PARSER = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.UNIX));
+    /**
+     * cron-utils' UNIX definition plus the CronJob macros. It must not support {@code ?}: that switches cron-utils to
+     * Quartz semantics, where a day must match both day fields instead of either.
+     */
+    private static final CronDefinition DEFINITION = CronDefinitionBuilder.defineCron()
+            .withMinutes()
+            .withValidRange(0, 59)
+            .withStrictRange()
+            .and()
+            .withHours()
+            .withValidRange(0, 23)
+            .withStrictRange()
+            .and()
+            .withDayOfMonth()
+            .withValidRange(1, 31)
+            .withStrictRange()
+            .and()
+            .withMonth()
+            .withValidRange(1, 12)
+            .withStrictRange()
+            .and()
+            .withDayOfWeek()
+            .withValidRange(0, 7)
+            .withMondayDoWValue(1)
+            .withIntMapping(7, 0)
+            .withStrictRange()
+            .and()
+            .withSupportedNicknameYearly()
+            .withSupportedNicknameAnnually()
+            .withSupportedNicknameMonthly()
+            .withSupportedNicknameWeekly()
+            .withSupportedNicknameDaily()
+            .withSupportedNicknameMidnight()
+            .withSupportedNicknameHourly()
+            .instance();
+
+    private static final CronParser PARSER = new CronParser(DEFINITION);
 
     private CronSchedules() {}
 

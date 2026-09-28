@@ -73,6 +73,7 @@ class SyncAdmissionTest {
                 argumentSet(
                         "cron with ranges, steps and lists",
                         sync(s -> s.getTrigger().getCron().setExpression("*/15 1-5 * 1-3 1,5"))),
+                argumentSet("cron macro", sync(s -> s.getTrigger().getCron().setExpression("@weekly"))),
                 argumentSet(
                         "cron with time zone",
                         sync(s -> s.getTrigger().getCron().setTimeZone("Europe/Amsterdam"))),
@@ -169,8 +170,8 @@ class SyncAdmissionTest {
                         sync(s -> s.getTrigger().getCron().setExpression("0 3 * * MON-FRI")),
                         "must be five space-separated fields"),
                 argumentSet(
-                        "CEL rejects macros",
-                        sync(s -> s.getTrigger().getCron().setExpression("@daily")),
+                        "CEL rejects unknown macro",
+                        sync(s -> s.getTrigger().getCron().setExpression("@every 1h")),
                         "must be five space-separated fields"),
                 argumentSet(
                         "CEL rejects question mark",
