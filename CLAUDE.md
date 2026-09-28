@@ -16,8 +16,8 @@ Built with Quarkus and the Java Operator SDK (JOSDK) via the `quarkus-operator-s
   is a manual run. The sync controller only creates runs; the run controller executes them and records statistics.
 - **Triggers:** `interval` (hourly/daily/weekly/monthly) runs at a moment within the period derived from a hash of the
   sync's namespace and name, so syncs spread out instead of all starting at once; `status.nextScheduleTime` shows it.
-  `cron` is five numeric fields only (no names, macros or `?`), parsed with cron-utils' stock `CronType.UNIX`: custom
-  cron-utils definitions silently require both day fields to match, and its day names map SUN to 7.
+  `cron` is five numeric fields only (no names, macros or `?`), parsed with cron-utils' stock `CronType.UNIX` because
+  it most closely aligns with Kubernetes CronJob schedules.
 - **Execution model:** a run executes as a Kubernetes Job, in the run's namespace, or in the operator namespace if any
   remote it uses (following crypt wrapping) is an RCloneClusterRemote. Credentials reach the Job through a per-run
   Secret next to it that the operator renders from the remotes' Secrets; never as values in the Job spec, and cluster
