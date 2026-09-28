@@ -20,7 +20,6 @@ import static com.tngtech.archunit.core.domain.JavaClass.Predicates.ANNOTATIONS;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.equivalentTo;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
-import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 
@@ -35,15 +34,10 @@ import jakarta.validation.Payload;
 @AnalyzeClasses(packages = "eu.derfniw.rco", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
 
-    private static final String[] LOGIC = {
-        "eu.derfniw.rco.sync..", "eu.derfniw.rco.remote..", "eu.derfniw.rco.validation.."
-    };
-
     /**
-     * Controllers and webhooks are entry points, called only by the framework. The logic packages serve them, and share
-     * {@code validation}. The model may use the logic packages' constraint annotations and their payloads (the error
-     * types): using an annotation isn't calling the code behind it. Every class must be in a layer, so a new package
-     * has to be placed here.
+     * Controllers and webhooks are entry points, called only by the framework, and the domain serves them. The model
+     * may use the domain's constraint annotations and their payloads (the error types): using an annotation isn't
+     * calling the code behind it. Every class must be in a layer, so a new package has to be placed here.
      */
     @ArchTest
     static final ArchRule layers = layeredArchitecture()
@@ -53,28 +47,16 @@ class ArchitectureTest {
             .definedBy("eu.derfniw.rco")
             .layer("Model")
             .definedBy("eu.derfniw.rco.api..")
-            .layer("Validation")
-            .definedBy("eu.derfniw.rco.validation..")
-            .layer("Sync")
-            .definedBy("eu.derfniw.rco.sync..")
-            .layer("Remote")
-            .definedBy("eu.derfniw.rco.remote..")
+            .layer("Domain")
+            .definedBy("eu.derfniw.rco.sync..", "eu.derfniw.rco.remote..", "eu.derfniw.rco.validation..")
             .layer("Entry")
             .definedBy("eu.derfniw.rco.controller..", "eu.derfniw.rco.webhook..")
             .whereLayer("Entry")
             .mayNotBeAccessedByAnyLayer()
-            .whereLayer("Sync")
+            .whereLayer("Domain")
             .mayOnlyBeAccessedByLayers("Entry")
-            .whereLayer("Remote")
-            .mayOnlyBeAccessedByLayers("Entry")
-            .whereLayer("Validation")
-            .mayOnlyBeAccessedByLayers("Sync", "Remote", "Entry")
-            .whereLayer("Config")
-            .mayOnlyBeAccessedByLayers("Entry")
-            .ignoreDependency(resideInAPackage("eu.derfniw.rco.api.."), ANNOTATIONS.and(resideInAnyPackage(LOGIC)))
-            .ignoreDependency(
-                    resideInAPackage("eu.derfniw.rco.api.."),
-                    assignableTo(Payload.class).and(resideInAnyPackage(LOGIC)));
+            .ignoreDependency(resideInAPackage("eu.derfniw.rco.api.."), ANNOTATIONS)
+            .ignoreDependency(resideInAPackage("eu.derfniw.rco.api.."), assignableTo(Payload.class));
 
     /** Only reconcilers deal with the operator framework. */
     @ArchTest
@@ -94,7 +76,7 @@ class ArchitectureTest {
             .dependOnClassesThat(
                     resideInAPackage("io.fabric8.kubernetes.client..").and(not(equivalentTo(CustomResource.class))));
 
-    /** The Kubernetes API model belongs to the CRD model and the entry points, not the logic packages. */
+    /** The Kubernetes API model belongs to the CRD model and the entry points, not the domain. */
     @ArchTest
     static final ArchRule kubernetesModel = noClasses()
             .that()

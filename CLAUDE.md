@@ -72,11 +72,11 @@ Package root `eu.derfniw.rco`:
   `@WithTestResource(KubeApiServerResource.class)` unless a test needs otherwise.
 - The running operator writes status concurrently with tests: update with `unlock().edit(...)` or re-fetch first.
 - `ArchitectureTest` (ArchUnit, plain JUnit) enforces the layering: `controller` and `webhook` are entry points nothing
-  depends on; `sync` and `remote` are used only by them, `validation` also by `sync` and `remote`, and the root package
-  (`OperatorConfig`) only by the entry points. The model may use the logic packages' constraint annotations and
-  payloads. Every class must be in a layer, so a new package has to be added to the test. It also limits where framework and Kubernetes types appear: JOSDK only in `controller`;
-  the Kubernetes client only in the entry points (elsewhere just `CustomResource`); the Kubernetes API model only in
-  the model and the entry points; CRD generator annotations only in the model.
+  depends on; the domain (`sync`, `remote`, `validation`) is used only by them, except that the model may use its
+  constraint annotations and payloads. Every class must be in a layer, so a new package has to be added to the test. It
+  also limits where framework and Kubernetes types appear: JOSDK only in `controller`; the Kubernetes client only in the
+  entry points (elsewhere just `CustomResource`); the Kubernetes API model only in the model and the entry points; CRD
+  generator annotations only in the model.
 - e2e tests against kind (image build, cert-manager, metrics) are not ported yet.
 
 ## Conventions
