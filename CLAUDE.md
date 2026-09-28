@@ -9,15 +9,24 @@ Built with Quarkus and the Java Operator SDK (JOSDK) via the `quarkus-operator-s
 
 ## Design decisions
 
-- **Execution model:** rclone runs as `rclone rcd` instances that the operator drives over the rc API (`sync/sync`
-  with `_async` + `_group`, `job/status`, `core/stats`, `core/bwlimit`). No Jobs/Pods per sync.
-- **Transfer services:** users declare rcd instances as a CRD (name undecided), in cluster-scoped and namespaced
-  variants. The operator provisions Deployment + Service + mTLS. A sync references a source remote, a destination
-  remote and a transfer service. Services can mount PVCs for `local` endpoints.
+- **Syncs and runs:** `RCloneSync` (namespaced only) runs rclone sync (not copy/move) from `source` to `destination`,
+  each a `RemoteRef` + path; a namespaced remote must be in the sync's namespace. Options are a typed subset, never a
+  free-form rclone flag map, so the limiter stays in control. Each triggered run is an `RCloneSyncRun` in the sync's
+  namespace, owned by the sync and named after the scheduled time (so it is never created twice); creating one by hand
+  is a manual run. The sync controller only creates runs; the run controller executes them and records statistics.
+- **Triggers:** `interval` (hourly/daily/weekly/monthly) runs at a moment within the period derived from a hash of the
+  sync's namespace and name, so syncs spread out instead of all starting at once; `status.nextScheduleTime` shows it.
+  `cron` is five numeric fields only (no names, macros or `?`), parsed with cron-utils' stock `CronType.UNIX`: custom
+  cron-utils definitions silently require both day fields to match, and its day names map SUN to 7.
+- **Execution model:** a run executes as a Kubernetes Job, in the run's namespace, or in the operator namespace if any
+  remote it uses (following crypt wrapping) is an RCloneClusterRemote. Credentials reach the Job through a per-run
+  Secret next to it that the operator renders from the remotes' Secrets; never as values in the Job spec, and cluster
+  remote credentials never leave the operator namespace. In the run's namespace the run owns the Job and Secret; in
+  the operator namespace owner references can't cross namespaces, so a finalizer on the run deletes them.
 - **Remotes:** `RCloneRemote` (namespaced) and `RCloneClusterRemote` (cluster-scoped) share `RCloneRemoteSpec`.
   Cluster remotes resolve Secrets in the operator namespace.
 - **Unions:** a `type` discriminator plus one optional field per variant, enforced with CEL rules
-  (`@ValidationRule`), following KEP-1027. Planned for the sync trigger too.
+  (`@ValidationRule`), following KEP-1027. Used by the remote spec and the sync trigger.
 - **Template remotes** use `${name}` placeholders filled from Secret keys declared in `inputs`.
 - **Constraint scope:** anything that starts a transfer must be routable through a central scheduler/limiter.
 
@@ -35,9 +44,11 @@ Package root `eu.derfniw.rco`:
 - `remote` — Jakarta constraints for remote checks CRD markers can't express (`@SelectedBackendPresent`,
   `@DeclaredPlaceholders`, plus `@NotNull`/`@NotBlank` on the model), and `RemoteValidator` (injected into the
   reconcilers and the webhook).
+- `sync` — `SyncValidator` and its constraints (`@ValidCron`, `@ValidTimeZone`), and `CronSchedules`, the parser for
+  cron triggers.
 - `controller` — reconcilers. `AbstractRemoteReconciler` holds the logic shared by both remote kinds.
-- `webhook` — validating admission webhooks, a plain JAX-RS resource on fabric8's `AdmissionReview` model, served
-  under `/webhooks/validate/<plural>`.
+- `webhook` — validating admission webhooks, one plain JAX-RS resource (`ValidationResource`) on fabric8's
+  `AdmissionReview` model, served under `/webhooks/validate/<plural>`. RCloneSyncRun has none: its schema covers it.
 - `src/main/kubernetes/kubernetes.yml` — hand-written manifests merged into the generated ones (webhook
   configuration, cert-manager Issuer/Certificate).
 - `samples/` — example CRs.
@@ -66,7 +77,9 @@ Package root `eu.derfniw.rco`:
 
 - rclone remote credentials live in Secrets and never in CRD specs, status, logs or events.
 - Never put user input into a constraint message template (Hibernate Validator interpolates `{…}` and `${…}`): use
-  message parameters or the dynamic payload.
+  the dynamic payload, or message parameters on a custom violation (`disableDefaultConstraintViolation()` +
+  `buildConstraintViolationWithTemplate`). Parameters on the default violation are not safe: its message is evaluated
+  as Expression Language after they are substituted.
 - Status is the source of truth for sync statistics: conditions for state, explicit units in field names
   (`bytesTransferred`, `bytesPerSecond`).
 - Reconciliation must be idempotent and safe against restarts: a restart mid-sync must not lose or double-count

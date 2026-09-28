@@ -17,10 +17,11 @@ package eu.derfniw.rco.webhook;
 
 import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
-import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
-import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
+import eu.derfniw.rco.api.v1alpha1.RCloneSync;
 import eu.derfniw.rco.remote.RemoteValidator;
+import eu.derfniw.rco.sync.SyncValidator;
 import eu.derfniw.rco.validation.FieldError;
+import eu.derfniw.rco.validation.ResourceValidator;
 import io.fabric8.kubernetes.api.model.StatusBuilder;
 import io.fabric8.kubernetes.api.model.StatusCause;
 import io.fabric8.kubernetes.api.model.StatusCauseBuilder;
@@ -36,39 +37,48 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Validating admission webhooks for RCloneRemote and RCloneClusterRemote, registered for CREATE and UPDATE. They run
- * the checks that the CRD schema and its CEL rules cannot express.
+ * Validating admission webhooks for RCloneRemote, RCloneClusterRemote and RCloneSync, registered for CREATE and
+ * UPDATE. They run the checks that the CRD schema and its CEL rules cannot express.
  */
 @Path("/webhooks/validate")
-public class RemoteValidationResource {
+public class ValidationResource {
 
     @Inject
     KubernetesSerialization serialization;
 
     @Inject
-    RemoteValidator validator;
+    RemoteValidator remoteValidator;
+
+    @Inject
+    SyncValidator syncValidator;
 
     @POST
     @Path("rcloneremotes")
     public AdmissionReview validateRemote(AdmissionReview review) {
-        return validate(review, RCloneRemote.class);
+        return validate(review, RCloneRemote.class, remoteValidator);
     }
 
     @POST
     @Path("rcloneclusterremotes")
     public AdmissionReview validateClusterRemote(AdmissionReview review) {
-        return validate(review, RCloneClusterRemote.class);
+        return validate(review, RCloneClusterRemote.class, remoteValidator);
     }
 
-    private AdmissionReview validate(
-            AdmissionReview review, Class<? extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>> type) {
+    @POST
+    @Path("rclonesyncs")
+    public AdmissionReview validateSync(AdmissionReview review) {
+        return validate(review, RCloneSync.class, syncValidator);
+    }
+
+    private <S> AdmissionReview validate(
+            AdmissionReview review, Class<? extends CustomResource<S, ?>> type, ResourceValidator<S> validator) {
         var request = review.getRequest();
-        var remote = serialization.convertValue(request.getObject(), type);
-        var errors = validator.validate(remote);
+        var resource = serialization.convertValue(request.getObject(), type);
+        var errors = validator.validate(resource);
 
         var response = errors.isEmpty()
                 ? new AdmissionResponseBuilder().withAllowed(true)
-                : denied(remote.getKind(), remote.getMetadata().getName(), errors);
+                : denied(resource.getKind(), resource.getMetadata().getName(), errors);
         return new AdmissionReviewBuilder()
                 .withApiVersion(review.getApiVersion())
                 .withKind(review.getKind())
@@ -78,7 +88,7 @@ public class RemoteValidationResource {
 
     /** Builds a response equivalent to apimachinery's {@code apierrors.NewInvalid}. */
     private static AdmissionResponseBuilder denied(String kind, String name, List<FieldError> errors) {
-        var causes = errors.stream().map(RemoteValidationResource::cause).toList();
+        var causes = errors.stream().map(ValidationResource::cause).toList();
         var message = "%s.%s \"%s\" is invalid: %s"
                 .formatted(
                         kind,
