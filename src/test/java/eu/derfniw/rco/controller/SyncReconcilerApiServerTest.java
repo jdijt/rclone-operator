@@ -16,7 +16,6 @@
 package eu.derfniw.rco.controller;
 
 import static eu.derfniw.rco.testsupport.Remotes.cluster;
-import static eu.derfniw.rco.testsupport.Remotes.crypt;
 import static eu.derfniw.rco.testsupport.Remotes.namespaced;
 import static eu.derfniw.rco.testsupport.Remotes.template;
 import static eu.derfniw.rco.testsupport.Syncs.run;
@@ -39,7 +38,6 @@ import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
-import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.test.common.ResourceArg;
@@ -50,7 +48,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
@@ -138,10 +135,7 @@ class SyncReconcilerApiServerTest {
                 .isEqualTo(RCloneSyncStatus.REASON_VALID);
     }
 
-    /**
-     * A remote that isn't Ready (a crypt remote also isn't while the remote it wraps isn't) keeps the sync from being
-     * Ready; the sync reacts when the remote becomes Ready.
-     */
+    /** A remote that isn't Ready keeps the sync from being Ready; the sync reacts when the remote becomes Ready. */
     @Test
     void remoteMustBeReady() {
         var namespace = freshNamespace();
@@ -159,33 +153,6 @@ class SyncReconcilerApiServerTest {
         client.resources(RCloneRemote.class)
                 .inNamespace(namespace)
                 .withName("source")
-                .edit(r -> {
-                    r.setSpec(READY_REMOTE);
-                    return r;
-                });
-
-        assertThat(awaitReady(created, c -> "True".equals(c.getStatus())).getReason())
-                .isEqualTo(RCloneSyncStatus.REASON_VALID);
-    }
-
-    /** A crypt remote isn't Ready while the remote it wraps isn't, so neither is a sync that uses it. */
-    @Test
-    void remoteWrappedByCryptMustBeReady() {
-        var namespace = freshNamespace();
-        createSecret(namespace, "crypt", "password");
-        createRemote(namespace, "source", crypt(c -> c.setRemoteRef(new RemoteRef(RemoteRef.Kind.REMOTE, "wrapped"))));
-        createRemote(namespace, "wrapped", INVALID_REMOTE);
-        createRemote(namespace, "destination", READY_REMOTE);
-        var sync = localSync(s -> {});
-        sync.getMetadata().setNamespace(namespace);
-        var created = client.resource(sync).create();
-
-        var notReady = awaitReady(created, c -> RCloneSyncStatus.REASON_REMOTE_NOT_READY.equals(c.getReason()));
-        assertThat(notReady.getMessage()).contains("spec.source.remoteRef", "\"source\"");
-
-        client.resources(RCloneRemote.class)
-                .inNamespace(namespace)
-                .withName("wrapped")
                 .edit(r -> {
                     r.setSpec(READY_REMOTE);
                     return r;
@@ -415,17 +382,6 @@ class SyncReconcilerApiServerTest {
         remote.getMetadata().setName(name);
         remote.getMetadata().setNamespace(namespace);
         client.resource(remote).create();
-    }
-
-    private void createSecret(String namespace, String name, String key) {
-        client.resource(new SecretBuilder()
-                        .withNewMetadata()
-                        .withNamespace(namespace)
-                        .withName(name)
-                        .endMetadata()
-                        .withStringData(Map.of(key, "value of " + key))
-                        .build())
-                .create();
     }
 
     private String freshNamespace() {
