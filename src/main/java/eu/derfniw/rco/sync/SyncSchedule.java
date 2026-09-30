@@ -15,23 +15,34 @@
  */
 package eu.derfniw.rco.sync;
 
+import com.cronutils.model.time.ExecutionTime;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 /** When a cron trigger fires. Times are whole minutes; the expression is evaluated in UTC. */
 public final class SyncSchedule {
 
-    private SyncSchedule() {}
+    private final ExecutionTime executionTime;
+
+    private SyncSchedule(ExecutionTime executionTime) {
+        this.executionTime = executionTime;
+    }
 
     /** The schedule of {@code expression}, which must pass {@link CronSchedules#parse}. */
     public static SyncSchedule of(String expression) {
-        throw new UnsupportedOperationException("not implemented yet");
+        return new SyncSchedule(ExecutionTime.forCron(CronSchedules.parse(expression)));
     }
 
     /** The first time strictly after {@code time}. */
     public Instant nextAfter(Instant time) {
-        throw new UnsupportedOperationException("not implemented yet");
+        return executionTime
+                .nextExecution(utc(time))
+                .map(ZonedDateTime::toInstant)
+                .orElseThrow(() -> new IllegalStateException("schedule has no time after " + time));
     }
 
     /**
@@ -41,6 +52,21 @@ public final class SyncSchedule {
      * @param since the most recent time a run was created for, or when the sync was created
      */
     public Optional<Instant> due(Instant since, Instant now, Duration deadline) {
-        throw new UnsupportedOperationException("not implemented yet");
+        return latestAtOrBefore(now)
+                .filter(time -> time.isAfter(since))
+                .filter(time -> !time.isBefore(now.minus(deadline)));
+    }
+
+    private Optional<Instant> latestAtOrBefore(Instant time) {
+        // Schedule times are whole minutes, so the latest one at or before time is at or before this minute.
+        var minute = utc(time.truncatedTo(ChronoUnit.MINUTES));
+        if (executionTime.isMatch(minute)) {
+            return Optional.of(minute.toInstant());
+        }
+        return executionTime.lastExecution(minute).map(ZonedDateTime::toInstant);
+    }
+
+    private static ZonedDateTime utc(Instant time) {
+        return time.atZone(ZoneOffset.UTC);
     }
 }

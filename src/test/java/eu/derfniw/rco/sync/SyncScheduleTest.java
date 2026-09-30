@@ -30,6 +30,8 @@ class SyncScheduleTest {
 
     private static final Duration HOUR = Duration.ofHours(1);
 
+    private static final String nextCasesCronExpr = "0 3 * * *";
+
     static Stream<Arguments> nextCases() {
         return Stream.of(
                 argumentSet("in UTC", "2026-09-28T12:00:00Z", "2026-09-29T03:00:00Z"),
@@ -39,10 +41,15 @@ class SyncScheduleTest {
     @ParameterizedTest
     @MethodSource("nextCases")
     void nextAfter(String after, String want) {
-        assertThat(SyncSchedule.of("0 3 * * *").nextAfter(Instant.parse(after))).isEqualTo(Instant.parse(want));
+        assertThat(SyncSchedule.of(nextCasesCronExpr).nextAfter(Instant.parse(after)))
+                .isEqualTo(Instant.parse(want));
     }
 
-    /** All with an hourly schedule, on the hour. */
+    /**
+     * All with an hourly schedule, on the hour.
+     */
+    private static final String dueCasesCronExpr = "0 * * * *";
+
     static Stream<Arguments> dueCases() {
         return Stream.of(
                 argumentSet("none since the last run", "10:00", "10:59:59", HOUR, null),
@@ -58,7 +65,7 @@ class SyncScheduleTest {
     @ParameterizedTest
     @MethodSource("dueCases")
     void due(String since, String now, Duration deadline, String want) {
-        var schedule = SyncSchedule.of("0 * * * *");
+        var schedule = SyncSchedule.of(dueCasesCronExpr);
         assertThat(schedule.due(at(since), at(now), deadline))
                 .isEqualTo(Optional.ofNullable(want).map(SyncScheduleTest::at));
     }
