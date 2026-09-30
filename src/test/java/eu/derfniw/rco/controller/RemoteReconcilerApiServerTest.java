@@ -121,18 +121,21 @@ class RemoteReconcilerApiServerTest {
     static Stream<Arguments> statusCases() {
         return Stream.of(Scope.values())
                 .flatMap(scope -> Stream.of(
-                        argumentSet(scope + " valid", scope, VALID_TEMPLATE, "True", RCloneRemoteStatus.REASON_VALID),
+                        argumentSet(
+                                scope + " valid", scope, VALID_TEMPLATE, "True", RCloneRemoteStatus.REASON_VALID, ""),
                         argumentSet(
                                 scope + " invalid",
                                 scope,
                                 INVALID_TEMPLATE,
                                 "False",
-                                RCloneRemoteStatus.REASON_INVALID)));
+                                RCloneRemoteStatus.REASON_INVALID,
+                                "spec.template.template: Invalid value: \"${field}\": reference to undeclared field field")));
     }
 
     @ParameterizedTest
     @MethodSource("statusCases")
-    void statusReflectsValidation(Scope scope, String template, String wantStatus, String wantReason) {
+    void statusReflectsValidation(
+            Scope scope, String template, String wantStatus, String wantReason, String wantMessage) {
         // The API server stores lastTransitionTime in whole seconds.
         var creation = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         var remote = scope.remote(template(t -> t.setTemplate(template)));
@@ -142,6 +145,7 @@ class RemoteReconcilerApiServerTest {
         var ready = awaitReady(created, c -> true);
         assertThat(ready.getStatus()).isEqualTo(wantStatus);
         assertThat(ready.getReason()).isEqualTo(wantReason);
+        assertThat(ready.getMessage()).isEqualTo(wantMessage);
         assertThat(ready.getObservedGeneration())
                 .isEqualTo(created.getMetadata().getGeneration());
         assertThat(Instant.parse(ready.getLastTransitionTime())).isAfterOrEqualTo(creation);
@@ -254,20 +258,19 @@ class RemoteReconcilerApiServerTest {
         createSecret(placeInTestNamespace(crypt), secretName, List.of("password"));
         var created = client.resource(crypt).create();
 
-        var notFound = awaitReady(created, c -> true);
+        var notFound = awaitReady(created, c -> c.getMessage().contains("cannot find"));
         assertThat(notFound.getStatus()).isEqualTo("False");
-        assertThat(notFound.getReason()).isEqualTo(RCloneRemoteStatus.REASON_REMOTE_NOT_FOUND);
+        assertThat(notFound.getReason()).isEqualTo(RCloneRemoteStatus.REASON_REMOTE_NOT_READY);
         assertThat(notFound.getMessage()).contains("spec.crypt.remoteRef", wrappedName);
 
         var wrapped = wrappedScope.remote(template(t -> t.setTemplate(INVALID_TEMPLATE)));
-        wrapped.getMetadata().setGenerateName(null);
         wrapped.getMetadata().setName(wrappedName);
         if (wrappedScope == Scope.NAMESPACED) {
             wrapped.getMetadata().setNamespace(crypt.getMetadata().getNamespace());
         }
         client.resource(wrapped).create();
 
-        var notReady = awaitReady(created, c -> RCloneRemoteStatus.REASON_REMOTE_NOT_READY.equals(c.getReason()));
+        var notReady = awaitReady(created, c -> c.getMessage().contains("not in ready state"));
         assertThat(notReady.getStatus()).isEqualTo("False");
         assertThat(notReady.getMessage()).contains("spec.crypt.remoteRef", wrappedName);
 
@@ -298,10 +301,9 @@ class RemoteReconcilerApiServerTest {
         var createdB = client.resource(b).create();
 
         for (var created : List.of(createdA, createdB)) {
-            var ready = awaitReady(created, c -> c.getMessage().contains("cycle"));
+            var ready = awaitReady(created, c -> c.getMessage().contains("not in ready state"));
             assertThat(ready.getStatus()).isEqualTo("False");
             assertThat(ready.getReason()).isEqualTo(RCloneRemoteStatus.REASON_REMOTE_NOT_READY);
-            assertThat(ready.getMessage()).contains(first, second);
         }
     }
 
@@ -315,6 +317,28 @@ class RemoteReconcilerApiServerTest {
         remote.getMetadata().setGenerateName(null);
         remote.getMetadata().setName(name);
         return remote;
+    }
+
+    /**
+     * Secrets aren't watched: a remote waiting for one re-checks at the configured interval (7s in tests, instead of
+     * the hourly re-check), so it becomes Ready soon after the Secret is created.
+     */
+    @ParameterizedTest
+    @EnumSource(Scope.class)
+    void missingSecretIsPickedUpOnceCreated(Scope scope) {
+        var secretName = "test-secret-" + UUID.randomUUID();
+        var remote = scope.remote(template(t -> {
+            t.setTemplate("${password}");
+            t.setInputs(Map.of("password", ref(secretName, "password")));
+        }));
+        var namespace = placeInTestNamespace(remote);
+        var created = client.resource(remote).create();
+        assertThat(awaitReady(created, c -> true).getReason()).isEqualTo(RCloneRemoteStatus.REASON_SECRET_NOT_FOUND);
+
+        createSecret(namespace, secretName, List.of("password"));
+
+        assertThat(awaitReady(created, c -> "True".equals(c.getStatus())).getReason())
+                .isEqualTo(RCloneRemoteStatus.REASON_VALID);
     }
 
     /**

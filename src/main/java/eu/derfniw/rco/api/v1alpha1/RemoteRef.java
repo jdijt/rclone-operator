@@ -21,23 +21,40 @@ import io.fabric8.generator.annotation.Default;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.Size;
 
-/** References an RCloneRemote in the same namespace or an RCloneClusterRemote. */
+/**
+ * References an RCloneRemote in the same namespace or an RCloneClusterRemote.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RemoteRef {
 
-    /** Kind of an RCloneRemote-like object referenced by name. */
+    /**
+     * Kind of an RCloneRemote-like object referenced by name.
+     */
     public enum Kind {
         @JsonProperty("RCloneRemote")
         REMOTE,
         @JsonProperty("RCloneClusterRemote")
-        CLUSTER_REMOTE
+        CLUSTER_REMOTE;
+
+        public static Kind forType(Class<?> type) {
+            if (RCloneClusterRemote.class.equals(type)) {
+                return CLUSTER_REMOTE;
+            } else if (RCloneRemote.class.equals(type)) {
+                return REMOTE;
+            }
+            throw new IllegalArgumentException("Note a remote type: " + type.getName());
+        }
     }
 
-    /** Kind of the referenced object. Defaults to RCloneRemote. */
+    /**
+     * Kind of the referenced object. Defaults to RCloneRemote.
+     */
     @Default("RCloneRemote")
     private Kind kind;
 
-    /** Name of the referenced object. */
+    /**
+     * Name of the referenced object.
+     */
     @Required
     @Size(min = 1)
     private String name;
@@ -50,7 +67,7 @@ public class RemoteRef {
     }
 
     public Kind getKind() {
-        return kind;
+        return kind == null ? Kind.REMOTE : kind;
     }
 
     public void setKind(Kind kind) {

@@ -31,8 +31,7 @@ public class RCloneRemoteStatus {
     public static final String REASON_INVALID = "InvalidSpec";
     /** A referenced Secret, or a key in it, does not exist. */
     public static final String REASON_SECRET_NOT_FOUND = "SecretNotFound";
-    /** The remote a crypt remote wraps does not exist. */
-    public static final String REASON_REMOTE_NOT_FOUND = "RemoteNotFound";
+
     /** The remote a crypt remote wraps is not Ready, or wraps (through other remotes) the crypt remote itself. */
     public static final String REASON_REMOTE_NOT_READY = "RemoteNotReady";
 

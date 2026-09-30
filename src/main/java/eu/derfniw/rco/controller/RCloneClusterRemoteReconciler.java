@@ -16,11 +16,15 @@
 package eu.derfniw.rco.controller;
 
 import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
+import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
+import eu.derfniw.rco.api.v1alpha1.RCloneRemoteStatus;
+import io.fabric8.kubernetes.client.CustomResource;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.MaxReconciliationInterval;
 import io.quarkiverse.operatorsdk.annotations.AdditionalRBACRules;
 import io.quarkiverse.operatorsdk.annotations.RBACRule;
 import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @ApplicationScoped
@@ -31,6 +35,11 @@ import java.util.concurrent.TimeUnit;
     @RBACRule(apiGroups = "", resources = "secrets", verbs = "get"),
 })
 public class RCloneClusterRemoteReconciler extends AbstractRemoteReconciler<RCloneClusterRemote> {
+
+    @Override
+    protected List<Class<? extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>>> canWrap() {
+        return RCloneClusterRemote.canWrap();
+    }
 
     @Override
     protected String secretNamespace(RCloneClusterRemote resource) {

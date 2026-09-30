@@ -63,8 +63,9 @@ Package root `eu.derfniw.rco`:
 
 ## Testing
 
-- `@QuarkusTest`s with injected beans, also for unit-level logic like the validator and the reconcile logic
-  (`@ParameterizedTest` + `argumentSet` for tables). Beans use package-private `@Inject` fields.
+- `@QuarkusTest`s with injected beans, also for unit-level logic like the validator (`@ParameterizedTest` +
+  `argumentSet` for tables). Beans use package-private `@Inject` fields. Reconcilers are tested through the API server
+  (`*ApiServerTest`), not by calling `reconcile` directly, so they can rely on their `Context` and event sources.
 - The app starts the operator, so every `@QuarkusTest` needs a real kube-apiserver + etcd from `KubeApiServerResource`
   (fabric8 kube-api-test). It registers the webhooks against the Quarkus test HTTPS port; pass the init arg
   `webhooks=false` to run without them. Quarkus restarts the app for each distinct resource setup, so reuse plain
