@@ -120,16 +120,22 @@ class RemoteReconcilerApiServerTest {
      */
     static Stream<Arguments> statusCases() {
         return Stream.of(Scope.values())
-                .flatMap(scope -> Stream.of(
-                        argumentSet(
-                                scope + " valid", scope, VALID_TEMPLATE, "True", RCloneRemoteStatus.REASON_VALID, ""),
-                        argumentSet(
-                                scope + " invalid",
-                                scope,
-                                INVALID_TEMPLATE,
-                                "False",
-                                RCloneRemoteStatus.REASON_INVALID,
-                                "spec.template.template: Invalid value: \"${field}\": reference to undeclared field field")));
+                .flatMap(
+                        scope -> Stream.of(
+                                argumentSet(
+                                        scope + " valid",
+                                        scope,
+                                        VALID_TEMPLATE,
+                                        "True",
+                                        RCloneRemoteStatus.REASON_VALID,
+                                        ""),
+                                argumentSet(
+                                        scope + " invalid",
+                                        scope,
+                                        INVALID_TEMPLATE,
+                                        "False",
+                                        RCloneRemoteStatus.REASON_INVALID,
+                                        "spec.template.template: Invalid value: \"${field}\": reference to undeclared field field")));
     }
 
     @ParameterizedTest
