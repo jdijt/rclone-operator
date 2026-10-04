@@ -33,4 +33,9 @@ public interface OperatorConfig {
     @WithDefault("1m")
     @DurationMin(seconds = 1, message = "must be at least 1 second")
     Duration secretRecheckInterval();
+
+    /** The image the Jobs running syncs use. Its entrypoint must be rclone. */
+    @WithDefault(
+            "docker.io/rclone/rclone:1.74.3@sha256:623378ad0ff3ebd5cebf77720843c0e02edfe46e2d5b5ac6bed54c6371780dfb")
+    String rcloneImage();
 }

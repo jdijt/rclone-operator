@@ -48,7 +48,11 @@ class ArchitectureTest {
             .layer("Model")
             .definedBy("eu.derfniw.rco.api..")
             .layer("Domain")
-            .definedBy("eu.derfniw.rco.sync..", "eu.derfniw.rco.remote..", "eu.derfniw.rco.validation..")
+            .definedBy(
+                    "eu.derfniw.rco.sync..",
+                    "eu.derfniw.rco.remote..",
+                    "eu.derfniw.rco.run..",
+                    "eu.derfniw.rco.validation..")
             .layer("Entry")
             .definedBy("eu.derfniw.rco.controller..", "eu.derfniw.rco.webhook..")
             .whereLayer("Entry")

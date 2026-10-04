@@ -13,14 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.derfniw.rco.api.v1alpha1;
+package eu.derfniw.rco.remote;
 
-/** The values of a status condition's {@code status}. */
-public final class ConditionStatus {
+import java.util.Map;
 
-    public static final String TRUE = "True";
-    public static final String FALSE = "False";
-    public static final String UNKNOWN = "Unknown";
+/** Fills the {@code ${name}} placeholders of remote templates. */
+public final class Templates {
 
-    private ConditionStatus() {}
+    private Templates() {}
+
+    /** Replaces every placeholder with its value from {@code values}; every placeholder must have one. */
+    public static String fill(String template, Map<String, String> values) {
+        throw new UnsupportedOperationException("not implemented yet");
+    }
 }

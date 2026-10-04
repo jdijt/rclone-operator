@@ -31,6 +31,21 @@ public class RCloneSyncRunStatus {
      */
     public static final String SUCCEEDED = "Succeeded";
 
+    /** Unknown: waiting, the RCloneSync does not exist. */
+    public static final String REASON_SYNC_NOT_FOUND = "SyncNotFound";
+    /** Unknown: waiting, the RCloneSync or a remote it uses is not Ready. */
+    public static final String REASON_SYNC_NOT_READY = "SyncNotReady";
+    /** Unknown: the Job is running the sync. */
+    public static final String REASON_RUNNING = "Running";
+    /** True: the Job completed. */
+    public static final String REASON_COMPLETED = "Completed";
+    /** False: the Job failed. */
+    public static final String REASON_FAILED = "Failed";
+    /** False: the Job disappeared before it finished. */
+    public static final String REASON_JOB_NOT_FOUND = "JobNotFound";
+    /** False: a value would not fit in the rclone configuration, e.g. a Secret value with a line break. */
+    public static final String REASON_INVALID_CREDENTIALS = "InvalidCredentials";
+
     /**
      * The current state of the run. Each condition has a unique type.
      *

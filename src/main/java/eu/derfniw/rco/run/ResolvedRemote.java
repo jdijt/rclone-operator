@@ -13,14 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.derfniw.rco.api.v1alpha1;
+package eu.derfniw.rco.run;
 
-/** The values of a status condition's {@code status}. */
-public final class ConditionStatus {
+import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
+import java.util.Map;
 
-    public static final String TRUE = "True";
-    public static final String FALSE = "False";
-    public static final String UNKNOWN = "Unknown";
-
-    private ConditionStatus() {}
-}
+/**
+ * A remote with everything needed to configure rclone for it.
+ *
+ * @param spec the remote's spec
+ * @param secrets the values of its Secret references, keyed by {@link RCloneRemoteSpec#secretKeyRefs()} field path
+ * @param wrapped for a crypt remote, the remote it wraps; otherwise {@code null}
+ */
+public record ResolvedRemote(RCloneRemoteSpec spec, Map<String, String> secrets, ResolvedRemote wrapped) {}
