@@ -17,6 +17,10 @@ Built with Quarkus and the Java Operator SDK (JOSDK) via the `quarkus-operator-s
 - **Triggers:** `cron` only for now (`trigger` stays a union for other kinds), evaluated in UTC. It follows Kubernetes
   CronJob schedules, except no time zone, no names or `?`, and 7 is also Sunday. `CronSchedules` defines the cron-utils
   definition (UNIX plus the macros); supporting `?` there would switch cron-utils to Quartz day matching.
+- **Scheduling:** like CronJob. Of the missed times only the most recent runs, and only within
+  `startingDeadlineSeconds`. `concurrencyPolicy` (Allow/Forbid/Replace) applies to all unfinished runs of the sync,
+  manual ones included, so runs map to their sync by `spec.syncRef`, not the owner reference. A sync creates runs only
+  while Ready: its spec is valid and both direct remotes are Ready (a crypt remote's Ready covers what it wraps).
 - **Execution model:** a run executes as a Kubernetes Job, in the run's namespace, or in the operator namespace if any
   remote it uses (following crypt wrapping) is an RCloneClusterRemote. Credentials reach the Job through a per-run
   Secret next to it that the operator renders from the remotes' Secrets; never as values in the Job spec, and cluster
@@ -43,9 +47,10 @@ Package root `eu.derfniw.rco`:
 - `remote` — Jakarta constraints for remote checks CRD markers can't express (`@SelectedBackendPresent`,
   `@DeclaredPlaceholders`, plus `@NotNull`/`@NotBlank` on the model), and `RemoteValidator` (injected into the
   reconcilers and the webhook).
-- `sync` — `SyncValidator` and its constraints (`@ValidCron`), and `CronSchedules`, the parser for
-  cron triggers.
-- `controller` — reconcilers. `AbstractRemoteReconciler` holds the logic shared by both remote kinds.
+- `sync` — `SyncValidator` and its constraints (`@ValidCron`), `CronSchedules`, the parser for cron triggers, and
+  `SyncSchedule`, which says when a trigger fires and which run is due.
+- `controller` — reconcilers. `AbstractRemoteReconciler` holds the logic shared by both remote kinds;
+  `RCloneSyncReconciler` reports sync readiness and creates the scheduled runs.
 - `webhook` — validating admission webhooks, one plain JAX-RS resource (`ValidationResource`) on fabric8's
   `AdmissionReview` model, served under `/webhooks/validate/<plural>`. RCloneSyncRun has none: its schema covers it.
 - `src/main/kubernetes/kubernetes.yml` — hand-written manifests merged into the generated ones (webhook

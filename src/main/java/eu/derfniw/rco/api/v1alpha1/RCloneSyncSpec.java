@@ -59,7 +59,7 @@ public class RCloneSyncSpec {
 
     /** Stops the trigger from creating runs. Existing runs, and runs created by hand, are not affected. */
     @Default("false")
-    private Boolean suspend;
+    private boolean suspend;
 
     /**
      * What to do when a run is due while another run of this sync (including one created by hand) has not finished.
@@ -118,11 +118,11 @@ public class RCloneSyncSpec {
         this.options = options;
     }
 
-    public Boolean getSuspend() {
+    public boolean isSuspend() {
         return suspend;
     }
 
-    public void setSuspend(Boolean suspend) {
+    public void setSuspend(boolean suspend) {
         this.suspend = suspend;
     }
 

@@ -17,6 +17,7 @@ package eu.derfniw.rco.controller;
 
 import eu.derfniw.rco.OperatorConfig;
 import eu.derfniw.rco.api.v1alpha1.BackendType;
+import eu.derfniw.rco.api.v1alpha1.ConditionStatus;
 import eu.derfniw.rco.api.v1alpha1.RCloneClusterRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemoteSpec;
@@ -77,16 +78,17 @@ abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpe
     public List<EventSource<?, R>> prepareEventSources(EventSourceContext<R> context) {
         context.getPrimaryCache().addIndexer(WRAPS_INDEX, AbstractRemoteReconciler::cryptWrapsKeys);
         return canWrap().stream()
-                .<EventSource<?, R>>map(type -> cryptWrappedRemotesEvents(type, Kind.forType(type), context))
+                .<EventSource<?, R>>map(type -> cryptWrappedRemotesEvents(type, context))
                 .toList();
     }
+
     /**
      * An event source that, when a remote of {@code type} changes, reconciles the crypt remotes wrapping it. A
      * namespaced remote can only be wrapped from its own namespace.
      */
     protected <W extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>>
-            InformerEventSource<W, R> cryptWrappedRemotesEvents(
-                    Class<W> type, RemoteRef.Kind kind, EventSourceContext<R> context) {
+            InformerEventSource<W, R> cryptWrappedRemotesEvents(Class<W> type, EventSourceContext<R> context) {
+        var kind = Kind.forType(type);
         var config = InformerEventSourceConfiguration.from(type, context.getPrimaryResourceClass())
                 .withName(cryptWrappedEventSourceName(type))
                 .withSecondaryToPrimaryMapper(wrapped -> context
@@ -141,7 +143,7 @@ abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpe
 
         var condition = new ConditionBuilder()
                 .withType(RCloneRemoteStatus.READY)
-                .withStatus(ready ? "True" : "False")
+                .withStatus(ready ? ConditionStatus.TRUE : ConditionStatus.FALSE)
                 .withReason(ready ? RCloneRemoteStatus.REASON_VALID : reason)
                 .withMessage(errors.stream().map(FieldError::toString).collect(Collectors.joining("; ")))
                 .withObservedGeneration(resource.getMetadata().getGeneration())
@@ -187,33 +189,28 @@ abstract class AbstractRemoteReconciler<R extends CustomResource<RCloneRemoteSpe
     /** Reads the wrapped remote from the cache of the event source that watches its kind. */
     private Optional<FieldError> getCryptWrappedRemoteStatus(R resource, Context<R> context) {
         var ref = resource.getSpec().getCrypt().getRemoteRef();
-        var otherRemote =
+        Optional<? extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>> otherRemote =
                 switch (ref.getKind()) {
                     // validation ensures only RCloneRemotes point to non-cluster remotes.
                     case REMOTE ->
                         context.getSecondaryResource(
-                                        RCloneRemote.class,
-                                        cryptWrappedEventSourceName(RCloneRemote.class),
-                                        ref.getName(),
-                                        resource.getMetadata().getNamespace())
-                                .orElse(null);
+                                RCloneRemote.class,
+                                cryptWrappedEventSourceName(RCloneRemote.class),
+                                ref.getName(),
+                                resource.getMetadata().getNamespace());
                     case CLUSTER_REMOTE ->
                         context.getSecondaryResource(
-                                        RCloneClusterRemote.class,
-                                        cryptWrappedEventSourceName(RCloneClusterRemote.class),
-                                        ref.getName(),
-                                        null)
-                                .orElse(null);
+                                RCloneClusterRemote.class,
+                                cryptWrappedEventSourceName(RCloneClusterRemote.class),
+                                ref.getName(),
+                                null);
                 };
-
-        if (otherRemote == null) {
+        if (otherRemote.isEmpty()) {
             return Optional.of(
-                    FieldError.invalid("spec.crypt.remoteRef", ref.getName(), "cannot find referenced remote"));
+                    FieldError.notFound("spec.crypt.remoteRef", ref.getName(), "cannot find referenced remote"));
         }
-        var readyCondition = otherRemote.getStatus().getConditions().stream()
-                .filter(c -> c.getType().equals(RCloneRemoteStatus.READY))
-                .findFirst();
-        if (readyCondition.isPresent() && "True".equals(readyCondition.get().getStatus())) {
+        var status = otherRemote.get().getStatus();
+        if (status != null && Conditions.isTrue(status.getConditions(), RCloneRemoteStatus.READY)) {
             return Optional.empty();
         }
         return Optional.of(

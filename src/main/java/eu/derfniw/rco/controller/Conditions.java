@@ -15,6 +15,7 @@
  */
 package eu.derfniw.rco.controller;
 
+import eu.derfniw.rco.api.v1alpha1.ConditionStatus;
 import io.fabric8.kubernetes.api.model.Condition;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -62,6 +63,15 @@ final class Conditions {
             changed = true;
         }
         return changed;
+    }
+
+    /** Whether {@code conditions} has a condition of {@code type} with status True. */
+    static boolean isTrue(List<Condition> conditions, String type) {
+        if (conditions == null) {
+            return false;
+        }
+        return conditions.stream()
+                .anyMatch(c -> c.getType().equals(type) && ConditionStatus.TRUE.equals(c.getStatus()));
     }
 
     // The API server stores condition timestamps with second precision.

@@ -15,6 +15,7 @@
  */
 package eu.derfniw.rco.api.v1alpha1;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.fabric8.crd.generator.annotation.AdditionalPrinterColumn;
 import io.fabric8.generator.annotation.ValidationRule;
 import io.fabric8.kubernetes.api.model.Namespaced;
@@ -55,5 +56,15 @@ public class RCloneSyncRun extends CustomResource<RCloneSyncRunSpec, RCloneSyncR
     @Override
     protected RCloneSyncRunStatus initStatus() {
         return new RCloneSyncRunStatus();
+    }
+
+    /** Whether the run is pending or in progress: its Succeeded condition is absent or Unknown. */
+    @JsonIgnore
+    public boolean isUnfinished() {
+        return getStatus() == null
+                || getStatus().getConditions().stream()
+                        .filter(c -> c.getType().equals(RCloneSyncRunStatus.SUCCEEDED))
+                        .noneMatch(c -> ConditionStatus.TRUE.equals(c.getStatus())
+                                || ConditionStatus.FALSE.equals(c.getStatus()));
     }
 }

@@ -18,6 +18,8 @@ spec:
     type: cron
     cron:
       expression: "@daily"
+  # A run that is due while another run of this sync is unfinished waits for it (the default).
+  concurrencyPolicy: Forbid
   options:
     transfers: 2
     filters:

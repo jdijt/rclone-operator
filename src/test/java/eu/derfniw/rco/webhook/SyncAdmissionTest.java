@@ -210,7 +210,7 @@ class SyncAdmissionTest {
 
         var created = client.resource(resource).create();
 
-        assertThat(created.getSpec().getSuspend()).isFalse();
+        assertThat(created.getSpec().isSuspend()).isFalse();
         assertThat(created.getSpec().getConcurrencyPolicy()).isEqualTo(RCloneSyncSpec.ConcurrencyPolicy.FORBID);
         assertThat(created.getSpec().getStartingDeadlineSeconds()).isEqualTo(3600L);
         assertThat(created.getSpec().getOptions().getDeleteMode()).isEqualTo(SyncOptions.DeleteMode.AFTER);

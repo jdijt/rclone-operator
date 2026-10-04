@@ -91,7 +91,7 @@ class SyncReconcilerApiServerTest {
         // A new sync doesn't run before its first scheduled time: the next 03:00 UTC, at whichever moment the
         // reconciler looked.
         var next = awaitStatus(created, s -> s.getNextScheduleTime() != null).getNextScheduleTime();
-        assertThat(next).isIn(nextBefore.toString(), next0300().toString());
+        assertThat(next).isIn(nextBefore, next0300());
         assertThat(runs(namespace)).isEmpty();
     }
 
@@ -184,9 +184,8 @@ class SyncReconcilerApiServerTest {
             assertThat(owner.getController()).isTrue();
         });
 
-        var status = awaitStatus(missed.sync(), s -> missed.due().toString().equals(s.getLastScheduleTime()));
-        assertThat(status.getNextScheduleTime())
-                .isEqualTo(missed.due().plus(Duration.ofHours(1)).toString());
+        var status = awaitStatus(missed.sync(), s -> missed.due().equals(s.getLastScheduleTime()));
+        assertThat(status.getNextScheduleTime()).isEqualTo(missed.due().plus(Duration.ofHours(1)));
         assertThat(runs(namespace)).hasSize(1);
     }
 
@@ -206,8 +205,28 @@ class SyncReconcilerApiServerTest {
         assertThat(runs(namespace)).isEmpty();
         var status = client.resource(missed.sync()).get().getStatus();
         assertThat(status.getNextScheduleTime()).isNull();
-        assertThat(status.getLastScheduleTime())
-                .isEqualTo(missed.lastScheduled().toString());
+        assertThat(status.getLastScheduleTime()).isEqualTo(missed.lastScheduled());
+    }
+
+    /** Suspending a sync that has a next time unsets it. */
+    @Test
+    void suspendingUnsetsTheNextTime() {
+        var namespace = freshNamespace();
+        createRemote(namespace, "source", READY_REMOTE);
+        createRemote(namespace, "destination", READY_REMOTE);
+        var sync = localSync(s -> {});
+        sync.getMetadata().setNamespace(namespace);
+        var created = client.resource(sync).create();
+        awaitStatus(created, s -> s.getNextScheduleTime() != null);
+
+        client.resource(created).unlock().edit(r -> {
+            r.getSpec().setSuspend(true);
+            return r;
+        });
+
+        awaitReady(created, c -> c.getObservedGeneration() == 2L);
+        assertThat(client.resource(created).get().getStatus().getNextScheduleTime())
+                .isNull();
     }
 
     /** A sync that isn't Ready creates no run; once Ready, it catches up on the due one. */
@@ -249,7 +268,7 @@ class SyncReconcilerApiServerTest {
         awaitReady(missed.sync(), c -> c.getObservedGeneration() == 2L);
         assertThat(runs(namespace)).extracting(r -> r.getMetadata().getName()).containsExactly("manual");
         assertThat(client.resource(missed.sync()).get().getStatus().getLastScheduleTime())
-                .isEqualTo(missed.lastScheduled().toString());
+                .isEqualTo(missed.lastScheduled());
 
         finish(manual);
 
@@ -316,7 +335,7 @@ class SyncReconcilerApiServerTest {
         awaitReady(created, c -> true);
 
         client.resource(created).unlock().editStatus(r -> {
-            r.getStatus().setLastScheduleTime(lastScheduled.toString());
+            r.getStatus().setLastScheduleTime(lastScheduled);
             return r;
         });
         return new Missed(created, lastScheduled, due);

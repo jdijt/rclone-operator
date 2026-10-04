@@ -17,6 +17,7 @@ package eu.derfniw.rco.api.v1alpha1;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.fabric8.kubernetes.api.model.Condition;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,18 +43,18 @@ public class RCloneSyncStatus {
     private List<Condition> conditions = new ArrayList<>();
 
     /**
-     * When the most recent scheduled run was due (RFC 3339). Runs are named after this time, so a run is never created
+     * When the most recent scheduled run was due. Runs are named after this time, so a run is never created
      * twice, even after it was removed by the history limits.
      */
-    private String lastScheduleTime;
+    private Instant lastScheduleTime;
 
     /**
-     * When the trigger creates the next run (RFC 3339). Unset while the sync is suspended or not Ready.
+     * When the trigger creates the next run. Unset while the sync is suspended or not Ready.
      */
-    private String nextScheduleTime;
+    private Instant nextScheduleTime;
 
-    /** When the most recent successful run completed (RFC 3339). */
-    private String lastSuccessfulTime;
+    /** When the most recent successful run completed. */
+    private Instant lastSuccessfulTime;
 
     /** The most recent completed run. */
     private RunSummary lastRun;
@@ -66,27 +67,27 @@ public class RCloneSyncStatus {
         this.conditions = conditions;
     }
 
-    public String getLastScheduleTime() {
+    public Instant getLastScheduleTime() {
         return lastScheduleTime;
     }
 
-    public void setLastScheduleTime(String lastScheduleTime) {
+    public void setLastScheduleTime(Instant lastScheduleTime) {
         this.lastScheduleTime = lastScheduleTime;
     }
 
-    public String getNextScheduleTime() {
+    public Instant getNextScheduleTime() {
         return nextScheduleTime;
     }
 
-    public void setNextScheduleTime(String nextScheduleTime) {
+    public void setNextScheduleTime(Instant nextScheduleTime) {
         this.nextScheduleTime = nextScheduleTime;
     }
 
-    public String getLastSuccessfulTime() {
+    public Instant getLastSuccessfulTime() {
         return lastSuccessfulTime;
     }
 
-    public void setLastSuccessfulTime(String lastSuccessfulTime) {
+    public void setLastSuccessfulTime(Instant lastSuccessfulTime) {
         this.lastSuccessfulTime = lastSuccessfulTime;
     }
 

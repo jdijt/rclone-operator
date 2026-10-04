@@ -17,6 +17,7 @@ package eu.derfniw.rco.api.v1alpha1;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.fabric8.kubernetes.api.model.Condition;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,11 +47,11 @@ public class RCloneSyncRunStatus {
     /** Name of the Job executing the run. */
     private String jobName;
 
-    /** When the run started (RFC 3339). */
-    private String startTime;
+    /** When the run started. */
+    private Instant startTime;
 
-    /** When the run ended (RFC 3339). */
-    private String completionTime;
+    /** When the run ended. */
+    private Instant completionTime;
 
     /** What the run transferred. Updated while the run is in progress. */
     private RunStatistics statistics;
@@ -87,19 +88,19 @@ public class RCloneSyncRunStatus {
         this.jobName = jobName;
     }
 
-    public String getStartTime() {
+    public Instant getStartTime() {
         return startTime;
     }
 
-    public void setStartTime(String startTime) {
+    public void setStartTime(Instant startTime) {
         this.startTime = startTime;
     }
 
-    public String getCompletionTime() {
+    public Instant getCompletionTime() {
         return completionTime;
     }
 
-    public void setCompletionTime(String completionTime) {
+    public void setCompletionTime(Instant completionTime) {
         this.completionTime = completionTime;
     }
 
