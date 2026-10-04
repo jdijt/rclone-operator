@@ -41,6 +41,7 @@ import io.fabric8.kubernetes.api.model.OwnerReference;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
+import io.fabric8.kubernetes.api.model.batch.v1.JobBuilder;
 import io.fabric8.kubernetes.api.model.batch.v1.JobCondition;
 import io.fabric8.kubernetes.api.model.batch.v1.JobConditionBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -174,8 +175,8 @@ class SyncRunReconcilerApiServerTest {
     }
 
     /**
-     * A cluster remote's credentials stay in the operator namespace, so the Job and Secret go there. They can't be
-     * owned by the run across namespaces: deleting the run deletes them.
+     * A cluster remote's credentials stay in the operator namespace, so the Job and Secret go there, annotated with the
+     * run. They can't be owned by it across namespaces: deleting the run deletes them.
      */
     @Test
     void clusterRemoteRunsInTheOperatorNamespace() {
@@ -203,7 +204,7 @@ class SyncRunReconcilerApiServerTest {
                 .get();
         for (var metadata : List.of(job.getMetadata(), secret.getMetadata())) {
             assertThat(metadata.getOwnerReferences()).isEmpty();
-            assertThat(metadata.getLabels())
+            assertThat(metadata.getAnnotations())
                     .containsEntry("rco.frozenbits.se/run-namespace", namespace)
                     .containsEntry("rco.frozenbits.se/run-name", "run");
         }
@@ -237,11 +238,15 @@ class SyncRunReconcilerApiServerTest {
     void failedJobFailsTheRun() {
         var namespace = freshNamespace();
         var run = startedRun(namespace);
-        finishJob(run, false);
+        var job = finishJob(run, false);
 
         var failed = awaitSucceeded(run, c -> !ConditionStatus.UNKNOWN.equals(c.getStatus()));
         assertThat(failed.getStatus()).isEqualTo(ConditionStatus.FALSE);
         assertThat(failed.getReason()).isEqualTo(RCloneSyncRunStatus.REASON_FAILED);
+        // When the Job failed, not when the operator noticed.
+        assertThat(client.resource(run).get().getStatus().getCompletionTime())
+                .isEqualTo(
+                        Instant.parse(job.getStatus().getConditions().getLast().getLastTransitionTime()));
         awaitSecretDeleted(run);
     }
 
@@ -260,6 +265,54 @@ class SyncRunReconcilerApiServerTest {
         var failed = awaitSucceeded(run, c -> !ConditionStatus.UNKNOWN.equals(c.getStatus()));
         assertThat(failed.getStatus()).isEqualTo(ConditionStatus.FALSE);
         assertThat(failed.getReason()).isEqualTo(RCloneSyncRunStatus.REASON_JOB_NOT_FOUND);
+    }
+
+    /**
+     * A Job the run's status doesn't record, e.g. because the status patch after creating it was lost, is taken over
+     * rather than started again, whatever the state of the sync.
+     */
+    @Test
+    void takesOverAJobItDidNotRecord() {
+        var namespace = freshNamespace();
+        var run = createRun(namespace);
+        awaitSucceeded(run, c -> RCloneSyncRunStatus.REASON_SYNC_NOT_FOUND.equals(c.getReason()));
+
+        var name = "rclone-run-" + run.getMetadata().getUid();
+        client.resource(new JobBuilder()
+                        .withNewMetadata()
+                        .withNamespace(namespace)
+                        .withName(name)
+                        .withLabels(Map.of("app.kubernetes.io/managed-by", "rclone-operator"))
+                        .withAnnotations(Map.of(
+                                "rco.frozenbits.se/run-namespace", namespace,
+                                "rco.frozenbits.se/run-name", "run",
+                                "rco.frozenbits.se/sync-generation", "3"))
+                        .endMetadata()
+                        .withNewSpec()
+                        .withNewTemplate()
+                        .withNewSpec()
+                        .withRestartPolicy("Never")
+                        .addNewContainer()
+                        .withName("rclone")
+                        .withImage(config.rcloneImage())
+                        .endContainer()
+                        .endSpec()
+                        .endTemplate()
+                        .endSpec()
+                        .build())
+                .create();
+
+        awaitSucceeded(run, c -> RCloneSyncRunStatus.REASON_RUNNING.equals(c.getReason()));
+        var status = client.resource(run).get().getStatus();
+        assertThat(status.getJobNamespace()).isEqualTo(namespace);
+        assertThat(status.getJobName()).isEqualTo(name);
+        assertThat(status.getSyncGeneration()).isEqualTo(3L);
+        assertThat(status.getStartTime()).isNotNull();
+
+        finishJob(run, true);
+        assertThat(awaitSucceeded(run, c -> !ConditionStatus.UNKNOWN.equals(c.getStatus()))
+                        .getReason())
+                .isEqualTo(RCloneSyncRunStatus.REASON_COMPLETED);
     }
 
     /** A Secret value that would break the rclone configuration fails the run before a Job is created. */

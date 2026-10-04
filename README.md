@@ -20,8 +20,11 @@ It is built with [Quarkus](https://quarkus.io) and the [Java Operator SDK](https
 - [x] `RCloneSync`: an rclone sync between two remotes, triggered by a cron expression in UTC (as in CronJobs, except
   no time zone, no names or `?`, and 7 is also Sunday), with a typed subset of rclone's options (dry run, transfers,
   checkers, delete mode, filters), and `RCloneSyncRun`: one run of a sync, created by its trigger or by hand. Triggers are validated by CEL rules and an
-  admission webhook (cron ranges). Only the CRDs exist; nothing runs them yet.
-- [ ] Controller runs the sync on schedule and reports run state via status conditions.
+  admission webhook (cron ranges).
+- [x] Controller runs the sync on schedule and reports run state via status conditions: each run executes as a Job
+  running rclone, with the remotes' credentials in a per-run Secret.
+- [ ] sftp host key verification (known_hosts): runs currently accept any host key.
+- [ ] A run timeout: a Job that never starts (e.g. an image pull failing) or never ends keeps its run Running.
 - [ ] Statistics per run in status: duration, transfer speed, bytes and files transferred, errors.
 - [ ] Prometheus metrics for the same statistics.
 - [ ] Resource constraints across jobs:

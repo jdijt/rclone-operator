@@ -22,8 +22,24 @@ public final class Templates {
 
     private Templates() {}
 
-    /** Replaces every placeholder with its value from {@code values}; every placeholder must have one. */
+    /**
+     * Replaces every placeholder with its value from {@code values}. The template must be valid (see
+     * {@link DeclaredPlaceholders}), so every placeholder has a value. Values are inserted as they are, not scanned
+     * again.
+     */
     public static String fill(String template, Map<String, String> values) {
-        throw new UnsupportedOperationException("not implemented yet");
+        var result = new StringBuilder();
+        int copied = 0;
+        for (var placeholder : TemplateScanner.scan(template)) {
+            if (placeholder instanceof TemplateScanner.Reference reference) {
+                var value = values.get(reference.name());
+                if (value == null) {
+                    throw new IllegalArgumentException("no value for placeholder " + reference.text());
+                }
+                result.append(template, copied, reference.offset()).append(value);
+                copied = reference.offset() + reference.text().length();
+            }
+        }
+        return result.append(template, copied, template.length()).toString();
     }
 }

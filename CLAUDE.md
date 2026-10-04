@@ -24,8 +24,12 @@ Built with Quarkus and the Java Operator SDK (JOSDK) via the `quarkus-operator-s
 - **Execution model:** a run executes as a Kubernetes Job, in the run's namespace, or in the operator namespace if any
   remote it uses (following crypt wrapping) is an RCloneClusterRemote. Credentials reach the Job through a per-run
   Secret next to it that the operator renders from the remotes' Secrets; never as values in the Job spec, and cluster
-  remote credentials never leave the operator namespace. In the run's namespace the run owns the Job and Secret; in
-  the operator namespace owner references can't cross namespaces, so a finalizer on the run deletes them.
+  remote credentials never leave the operator namespace. The Secret holds one rendered `rclone.conf` (sections
+  `source`, `destination`, plus `<endpoint>_<n>` for remotes crypt remotes wrap; password options obscured, templates
+  as alias remotes) and is deleted when the run finishes. Both are named `rclone-run-<run uid>`. In the run's
+  namespace the run owns them; in the operator namespace owner references can't cross namespaces, so they are
+  annotated with the run and its cleanup (a JOSDK `Cleaner`, so every run carries the finalizer) deletes them. A run
+  waits (Succeeded Unknown) while its sync is missing or not Ready; one Job attempt per run.
 - **Remotes:** `RCloneRemote` (namespaced) and `RCloneClusterRemote` (cluster-scoped) share `RCloneRemoteSpec`.
   Cluster remotes resolve Secrets in the operator namespace.
 - **Unions:** a `type` discriminator plus one optional field per variant, enforced with CEL rules
@@ -45,12 +49,15 @@ Package root `eu.derfniw.rco`:
   `customValidation` for checks that don't fit a constraint. Every constraint carries one `Reason` payload (the error
   type); offending values go in the dynamic payload. No dependency on the Kubernetes client beyond `CustomResource`.
 - `remote` — Jakarta constraints for remote checks CRD markers can't express (`@SelectedBackendPresent`,
-  `@DeclaredPlaceholders`, plus `@NotNull`/`@NotBlank` on the model), and `RemoteValidator` (injected into the
-  reconcilers and the webhook).
+  `@DeclaredPlaceholders`, plus `@NotNull`/`@NotBlank` on the model), `RemoteValidator` (injected into the
+  reconcilers and the webhook), and `Templates`, which fills template placeholders.
 - `sync` — `SyncValidator` and its constraints (`@ValidCron`), `CronSchedules`, the parser for cron triggers, and
   `SyncSchedule`, which says when a trigger fires and which run is due.
+- `run` — what a run executes: `RCloneConfig` renders the remotes into `rclone.conf`, `Obscure` is rclone's password
+  obscuring, and `SyncCommand` builds the rclone arguments.
 - `controller` — reconcilers. `AbstractRemoteReconciler` holds the logic shared by both remote kinds;
-  `RCloneSyncReconciler` reports sync readiness and creates the scheduled runs.
+  `RCloneSyncReconciler` reports sync readiness and creates the scheduled runs; `RCloneSyncRunReconciler` executes a
+  run as a Job and reports its outcome.
 - `webhook` — validating admission webhooks, one plain JAX-RS resource (`ValidationResource`) on fabric8's
   `AdmissionReview` model, served under `/webhooks/validate/<plural>`. RCloneSyncRun has none: its schema covers it.
 - `src/main/kubernetes/kubernetes.yml` — hand-written manifests merged into the generated ones (webhook

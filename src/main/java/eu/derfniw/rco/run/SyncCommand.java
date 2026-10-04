@@ -15,8 +15,12 @@
  */
 package eu.derfniw.rco.run;
 
+import eu.derfniw.rco.api.v1alpha1.FilterRule;
 import eu.derfniw.rco.api.v1alpha1.RCloneSyncSpec;
+import eu.derfniw.rco.api.v1alpha1.SyncEndpoint;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /** The rclone command line of a sync, run against the configuration of {@link RCloneConfig}. */
 public final class SyncCommand {
@@ -25,11 +29,46 @@ public final class SyncCommand {
     public static final String CONFIG_DIR = "/etc/rclone";
     /** Name of the configuration file, and its key in the Secret holding it. */
     public static final String CONFIG_FILE = "rclone.conf";
+    /** rclone's cache directory; it must be writable. */
+    public static final String CACHE_DIR = "/tmp/rclone";
 
     private SyncCommand() {}
 
     /** The arguments to rclone (the image's entrypoint). */
     public static List<String> args(RCloneSyncSpec spec) {
-        throw new UnsupportedOperationException("not implemented yet");
+        var args = new ArrayList<String>();
+        args.add("sync");
+        args.add(location(RCloneConfig.SOURCE, spec.getSource()));
+        args.add(location(RCloneConfig.DESTINATION, spec.getDestination()));
+        args.add("--config=" + CONFIG_DIR + "/" + CONFIG_FILE);
+        args.add("--cache-dir=" + CACHE_DIR);
+
+        var options = spec.getOptions();
+        if (options == null) {
+            return args;
+        }
+        if (Boolean.TRUE.equals(options.getDryRun())) {
+            args.add("--dry-run");
+        }
+        if (options.getTransfers() != null) {
+            args.add("--transfers=" + options.getTransfers());
+        }
+        if (options.getCheckers() != null) {
+            args.add("--checkers=" + options.getCheckers());
+        }
+        if (options.getDeleteMode() != null) {
+            args.add("--delete-" + options.getDeleteMode().name().toLowerCase(Locale.ROOT));
+        }
+        if (options.getFilters() != null) {
+            for (var rule : options.getFilters()) {
+                var sign = rule.getAction() == FilterRule.Action.INCLUDE ? "+" : "-";
+                args.add("--filter=" + sign + " " + rule.getPattern());
+            }
+        }
+        return args;
+    }
+
+    private static String location(String section, SyncEndpoint endpoint) {
+        return section + ":" + (endpoint.getPath() == null ? "" : endpoint.getPath());
     }
 }

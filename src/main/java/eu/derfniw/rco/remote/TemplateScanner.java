@@ -28,8 +28,8 @@ final class TemplateScanner {
 
     sealed interface Placeholder permits Reference, Malformed {}
 
-    /** A well-formed {@code ${name}}. */
-    record Reference(String name, String text) implements Placeholder {}
+    /** A well-formed {@code ${name}}, at {@code offset} in the template. */
+    record Reference(String name, String text, int offset) implements Placeholder {}
 
     /** A {@code ${} that does not start a well-formed placeholder. */
     record Malformed(String text, int offset) implements Placeholder {}
@@ -47,7 +47,7 @@ final class TemplateScanner {
             }
             boolean closed = end < template.length() && template.charAt(end) == '}';
             if (end > nameStart && closed) {
-                result.add(new Reference(template.substring(nameStart, end), template.substring(i, end + 1)));
+                result.add(new Reference(template.substring(nameStart, end), template.substring(i, end + 1), i));
                 i = end + 1;
             } else {
                 // Report up to and including the next '}' (or the rest of the template) so the error shows the
