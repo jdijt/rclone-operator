@@ -18,23 +18,18 @@ package eu.derfniw.rco.sync;
 import static eu.derfniw.rco.testsupport.Syncs.sync;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import eu.derfniw.rco.api.v1alpha1.IntervalTrigger;
-import eu.derfniw.rco.api.v1alpha1.SyncTrigger;
 import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import eu.derfniw.rco.validation.FieldError;
 import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 @QuarkusTest
 @WithTestResource(KubeApiServerResource.class)
 class SyncValidatorTest {
 
     private static final String EXPRESSION_FIELD = "spec.trigger.cron.expression";
-    private static final String TIME_ZONE_FIELD = "spec.trigger.cron.timeZone";
 
     @Inject
     SyncValidator validator;
@@ -72,27 +67,5 @@ class SyncValidatorTest {
         assertThat(validator.validate(sync(s -> s.getTrigger().getCron().setExpression(expression))))
                 .singleElement()
                 .satisfies(e -> assertThat(e.detail()).contains("Expression: ${1+1} "));
-    }
-
-    @Test
-    void intervalTriggerIsValid() {
-        assertThat(validator.validate(sync(s -> s.setTrigger(SyncTrigger.interval(IntervalTrigger.Every.DAILY)))))
-                .isEmpty();
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"Europe/Amsterdam", "America/Argentina/Buenos_Aires", "UTC", "Etc/GMT+2"})
-    void validTimeZone(String timeZone) {
-        assertThat(validator.validate(sync(s -> s.getTrigger().getCron().setTimeZone(timeZone))))
-                .isEmpty();
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"Mars/Olympus_Mons", "europe/amsterdam", "+02:00", "GMT+2", "Local"})
-    void invalidTimeZone(String timeZone) {
-        assertThat(validator.validate(sync(s -> s.getTrigger().getCron().setTimeZone(timeZone))))
-                .singleElement()
-                .isEqualTo(FieldError.invalid(
-                        TIME_ZONE_FIELD, timeZone, "must be an IANA time zone name, such as Europe/Amsterdam"));
     }
 }

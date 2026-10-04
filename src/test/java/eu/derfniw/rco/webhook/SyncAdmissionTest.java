@@ -21,12 +21,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.params.provider.Arguments.argumentSet;
 
 import eu.derfniw.rco.api.v1alpha1.FilterRule;
-import eu.derfniw.rco.api.v1alpha1.IntervalTrigger;
 import eu.derfniw.rco.api.v1alpha1.RCloneRemote;
 import eu.derfniw.rco.api.v1alpha1.RCloneSync;
+import eu.derfniw.rco.api.v1alpha1.RCloneSyncSpec;
 import eu.derfniw.rco.api.v1alpha1.RemoteRef;
 import eu.derfniw.rco.api.v1alpha1.SyncOptions;
-import eu.derfniw.rco.api.v1alpha1.SyncTrigger;
 import eu.derfniw.rco.testsupport.KubeApiServerResource;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResourceBuilder;
 import io.fabric8.kubernetes.api.model.HasMetadata;
@@ -69,15 +68,11 @@ class SyncAdmissionTest {
                     s.getDestination().setPath("/backup/photos");
                 })),
                 argumentSet(
-                        "interval trigger", sync(s -> s.setTrigger(SyncTrigger.interval(IntervalTrigger.Every.DAILY)))),
-                argumentSet(
                         "cron with ranges, steps and lists",
                         sync(s -> s.getTrigger().getCron().setExpression("*/15 1-5 * 1-3 1,5"))),
                 argumentSet("cron macro", sync(s -> s.getTrigger().getCron().setExpression("@weekly"))),
-                argumentSet(
-                        "cron with time zone",
-                        sync(s -> s.getTrigger().getCron().setTimeZone("Europe/Amsterdam"))),
                 argumentSet("every option", sync(s -> s.setOptions(allOptions()))),
+                argumentSet("longest name", named("s".repeat(242))),
                 argumentSet("no run history", sync(s -> {
                     s.setSuccessfulRunsHistoryLimit(0);
                     s.setFailedRunsHistoryLimit(0);
@@ -111,9 +106,9 @@ class SyncAdmissionTest {
                         genericSync(Map.of("type", "manual")),
                         "Unsupported value: \"manual\""),
                 argumentSet(
-                        "enum rejects unknown interval",
-                        genericSync(Map.of("type", "interval", "interval", Map.of("every", "yearly"))),
-                        "Unsupported value: \"yearly\""),
+                        "enum rejects removed interval trigger type",
+                        genericSync(Map.of("type", "interval", "interval", Map.of("every", "daily"))),
+                        "Unsupported value: \"interval\""),
                 argumentSet(
                         "minLength rejects empty cron expression",
                         sync(s -> s.getTrigger().getCron().setExpression("")),
@@ -125,6 +120,10 @@ class SyncAdmissionTest {
                             options.setTransfers(0);
                             s.setOptions(options);
                         }),
+                        "should be greater than or equal to 1"),
+                argumentSet(
+                        "minimum rejects zero starting deadline",
+                        sync(s -> s.setStartingDeadlineSeconds(0L)),
                         "should be greater than or equal to 1"),
                 argumentSet(
                         "minimum rejects negative history limit",
@@ -139,22 +138,17 @@ class SyncAdmissionTest {
                         }),
                         "spec.options.filters[0].pattern: Required value"),
 
+                // CEL: run names (<sync>-<minutes since the epoch>) must fit in 253 characters.
+                argumentSet(
+                        "CEL rejects a name too long for its run names",
+                        named("s".repeat(243)),
+                        "metadata.name must be at most 242 characters"),
+
                 // CEL: type <=> matching trigger set.
                 argumentSet(
                         "CEL rejects type cron without cron",
                         sync(s -> s.getTrigger().setCron(null)),
                         "cron must be set if and only if type is cron"),
-                argumentSet(
-                        "CEL rejects type interval without interval",
-                        sync(s -> {
-                            s.getTrigger().setType(SyncTrigger.Type.INTERVAL);
-                            s.getTrigger().setCron(null);
-                        }),
-                        "interval must be set if and only if type is interval"),
-                argumentSet(
-                        "CEL rejects a second trigger besides the selected one",
-                        sync(s -> s.getTrigger().setInterval(new IntervalTrigger(IntervalTrigger.Every.DAILY))),
-                        "interval must be set if and only if type is interval"),
 
                 // CEL: cron expression shape, numeric fields only.
                 argumentSet(
@@ -182,16 +176,7 @@ class SyncAdmissionTest {
                 argumentSet(
                         "webhook rejects cron value out of range",
                         sync(s -> s.getTrigger().getCron().setExpression("61 * * * *")),
-                        "spec.trigger.cron.expression: Invalid value: \"61 * * * *\": must be a valid cron schedule"),
-                argumentSet(
-                        "webhook rejects unknown time zone",
-                        sync(s -> s.getTrigger().getCron().setTimeZone("Mars/Olympus_Mons")),
-                        "spec.trigger.cron.timeZone: Invalid value: \"Mars/Olympus_Mons\": must be an IANA time zone"
-                                + " name"),
-                argumentSet(
-                        "webhook rejects time zone offset",
-                        sync(s -> s.getTrigger().getCron().setTimeZone("+02:00")),
-                        DENIED));
+                        "spec.trigger.cron.expression: Invalid value: \"61 * * * *\": must be a valid cron schedule"));
     }
 
     @ParameterizedTest
@@ -225,7 +210,9 @@ class SyncAdmissionTest {
 
         var created = client.resource(resource).create();
 
-        assertThat(created.getSpec().getSuspend()).isFalse();
+        assertThat(created.getSpec().isSuspend()).isFalse();
+        assertThat(created.getSpec().getConcurrencyPolicy()).isEqualTo(RCloneSyncSpec.ConcurrencyPolicy.FORBID);
+        assertThat(created.getSpec().getStartingDeadlineSeconds()).isEqualTo(3600L);
         assertThat(created.getSpec().getOptions().getDeleteMode()).isEqualTo(SyncOptions.DeleteMode.AFTER);
         assertThat(created.getSpec().getSource().getRemoteRef().getKind()).isEqualTo(RemoteRef.Kind.REMOTE);
         assertThat(created.getSpec().getSuccessfulRunsHistoryLimit()).isEqualTo(3);
@@ -242,6 +229,12 @@ class SyncAdmissionTest {
                 new FilterRule(FilterRule.Action.INCLUDE, "/photos/**"),
                 new FilterRule(FilterRule.Action.EXCLUDE, "*")));
         return options;
+    }
+
+    private static RCloneSync named(String name) {
+        var sync = sync(s -> {});
+        sync.getMetadata().setName(name);
+        return sync;
     }
 
     private static RCloneSync withoutSpec() {

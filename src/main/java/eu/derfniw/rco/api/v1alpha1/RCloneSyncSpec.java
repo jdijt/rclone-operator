@@ -16,6 +16,7 @@
 package eu.derfniw.rco.api.v1alpha1;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.fabric8.generator.annotation.Default;
 import io.fabric8.generator.annotation.Min;
 import io.fabric8.generator.annotation.Required;
@@ -24,6 +25,21 @@ import jakarta.validation.Valid;
 /** Desired state of an RCloneSync: makes the destination match the source (rclone sync), whenever the trigger fires. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RCloneSyncSpec {
+
+    /** What to do when a run is due while another run of the sync has not finished, as for a Kubernetes CronJob. */
+    public enum ConcurrencyPolicy {
+        /** Start the new run alongside the unfinished one. */
+        @JsonProperty("Allow")
+        ALLOW,
+        /**
+         * Wait: the due run starts once the unfinished one finishes, if that is still within startingDeadlineSeconds.
+         */
+        @JsonProperty("Forbid")
+        FORBID,
+        /** Delete the unfinished runs, then start the new one. */
+        @JsonProperty("Replace")
+        REPLACE
+    }
 
     /** Where files are copied from. It is never modified. */
     @Required
@@ -43,7 +59,22 @@ public class RCloneSyncSpec {
 
     /** Stops the trigger from creating runs. Existing runs, and runs created by hand, are not affected. */
     @Default("false")
-    private Boolean suspend;
+    private boolean suspend;
+
+    /**
+     * What to do when a run is due while another run of this sync (including one created by hand) has not finished.
+     */
+    @Default("Forbid")
+    private ConcurrencyPolicy concurrencyPolicy;
+
+    /**
+     * How late, in seconds, a run may still start after its scheduled time: after operator downtime, while the sync was
+     * suspended or not Ready, or while concurrencyPolicy Forbid made it wait. Of the missed times only the most recent
+     * one runs, and only if it is within this deadline.
+     */
+    @Default("3600")
+    @Min(1)
+    private Long startingDeadlineSeconds;
 
     /** Number of succeeded RCloneSyncRuns to keep. */
     @Default("3")
@@ -87,12 +118,28 @@ public class RCloneSyncSpec {
         this.options = options;
     }
 
-    public Boolean getSuspend() {
+    public boolean isSuspend() {
         return suspend;
     }
 
-    public void setSuspend(Boolean suspend) {
+    public void setSuspend(boolean suspend) {
         this.suspend = suspend;
+    }
+
+    public ConcurrencyPolicy getConcurrencyPolicy() {
+        return concurrencyPolicy;
+    }
+
+    public void setConcurrencyPolicy(ConcurrencyPolicy concurrencyPolicy) {
+        this.concurrencyPolicy = concurrencyPolicy;
+    }
+
+    public Long getStartingDeadlineSeconds() {
+        return startingDeadlineSeconds;
+    }
+
+    public void setStartingDeadlineSeconds(Long startingDeadlineSeconds) {
+        this.startingDeadlineSeconds = startingDeadlineSeconds;
     }
 
     public Integer getSuccessfulRunsHistoryLimit() {

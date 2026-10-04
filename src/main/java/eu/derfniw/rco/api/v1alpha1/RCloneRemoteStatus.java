@@ -32,6 +32,9 @@ public class RCloneRemoteStatus {
     /** A referenced Secret, or a key in it, does not exist. */
     public static final String REASON_SECRET_NOT_FOUND = "SecretNotFound";
 
+    /** The remote a crypt remote wraps is not Ready, or wraps (through other remotes) the crypt remote itself. */
+    public static final String REASON_REMOTE_NOT_READY = "RemoteNotReady";
+
     /**
      * The current state of the remote. Each condition has a unique type.
      *

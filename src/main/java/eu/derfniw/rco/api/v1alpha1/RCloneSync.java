@@ -29,6 +29,8 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @Group(RCloneRemote.GROUP)
 @Version(RCloneRemote.VERSION)
 @ValidationRule(value = "has(self.spec)", message = "spec is required")
+// Runs are named <sync>-<minutes since the epoch>, which must fit in 253 characters.
+@ValidationRule(value = "size(self.metadata.name) <= 242", message = "metadata.name must be at most 242 characters")
 @AdditionalPrinterColumn(
         name = "Source",
         jsonPath = ".spec.source.remoteRef.name",
@@ -36,10 +38,6 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @AdditionalPrinterColumn(
         name = "Destination",
         jsonPath = ".spec.destination.remoteRef.name",
-        type = AdditionalPrinterColumn.Type.STRING)
-@AdditionalPrinterColumn(
-        name = "Interval",
-        jsonPath = ".spec.trigger.interval.every",
         type = AdditionalPrinterColumn.Type.STRING)
 @AdditionalPrinterColumn(
         name = "Cron",

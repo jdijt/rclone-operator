@@ -17,6 +17,7 @@ package eu.derfniw.rco.api.v1alpha1;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.Instant;
 
 /** A completed RCloneSyncRun, summarized in the status of its RCloneSync. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -36,11 +37,11 @@ public class RunSummary {
     /** How the run ended. */
     private Result result;
 
-    /** When the run started (RFC 3339). */
-    private String startTime;
+    /** When the run started. */
+    private Instant startTime;
 
-    /** When the run ended (RFC 3339). */
-    private String completionTime;
+    /** When the run ended. */
+    private Instant completionTime;
 
     /** What the run transferred. */
     private RunStatistics statistics;
@@ -61,19 +62,19 @@ public class RunSummary {
         this.result = result;
     }
 
-    public String getStartTime() {
+    public Instant getStartTime() {
         return startTime;
     }
 
-    public void setStartTime(String startTime) {
+    public void setStartTime(Instant startTime) {
         this.startTime = startTime;
     }
 
-    public String getCompletionTime() {
+    public Instant getCompletionTime() {
         return completionTime;
     }
 
-    public void setCompletionTime(String completionTime) {
+    public void setCompletionTime(Instant completionTime) {
         this.completionTime = completionTime;
     }
 

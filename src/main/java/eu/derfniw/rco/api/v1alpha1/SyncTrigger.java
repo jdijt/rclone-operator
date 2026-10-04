@@ -24,11 +24,9 @@ import jakarta.validation.Valid;
 /**
  * Decides when an RCloneSync runs.
  *
- * <p>It is a discriminated union: {@code type} selects which of the trigger fields must be set.
+ * <p>It is a discriminated union: {@code type} selects which of the trigger fields must be set. Cron is the only kind
+ * for now; the union leaves room for others.
  */
-@ValidationRule(
-        value = "self.type == 'interval' ? has(self.interval) : !has(self.interval)",
-        message = "interval must be set if and only if type is interval")
 @ValidationRule(
         value = "self.type == 'cron' ? has(self.cron) : !has(self.cron)",
         message = "cron must be set if and only if type is cron")
@@ -37,8 +35,6 @@ public class SyncTrigger {
 
     /** The kind of trigger. Each value is also the name of the field that configures it. */
     public enum Type {
-        @JsonProperty("interval")
-        INTERVAL,
         @JsonProperty("cron")
         CRON
     }
@@ -47,21 +43,11 @@ public class SyncTrigger {
     @Required
     private Type type;
 
-    /** Runs the sync once per period, at a time the operator chooses. */
-    private IntervalTrigger interval;
-
     /** Runs the sync on a cron schedule. */
     @Valid
     private CronTrigger cron;
 
     public SyncTrigger() {}
-
-    public static SyncTrigger interval(IntervalTrigger.Every every) {
-        var trigger = new SyncTrigger();
-        trigger.setType(Type.INTERVAL);
-        trigger.setInterval(new IntervalTrigger(every));
-        return trigger;
-    }
 
     public static SyncTrigger cron(String expression) {
         var trigger = new SyncTrigger();
@@ -76,14 +62,6 @@ public class SyncTrigger {
 
     public void setType(Type type) {
         this.type = type;
-    }
-
-    public IntervalTrigger getInterval() {
-        return interval;
-    }
-
-    public void setInterval(IntervalTrigger interval) {
-        this.interval = interval;
     }
 
     public CronTrigger getCron() {

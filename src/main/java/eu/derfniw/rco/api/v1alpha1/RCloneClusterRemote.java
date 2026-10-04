@@ -20,6 +20,7 @@ import io.fabric8.generator.annotation.ValidationRule;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.model.annotation.Group;
 import io.fabric8.kubernetes.model.annotation.Version;
+import java.util.List;
 
 /**
  * A cluster-scoped rclone remote. It can be used by syncs in any namespace; its Secrets are resolved in the operator
@@ -50,5 +51,9 @@ public class RCloneClusterRemote extends CustomResource<RCloneRemoteSpec, RClone
     @Override
     protected RCloneRemoteStatus initStatus() {
         return new RCloneRemoteStatus();
+    }
+
+    public static List<Class<? extends CustomResource<RCloneRemoteSpec, RCloneRemoteStatus>>> canWrap() {
+        return List.of(RCloneClusterRemote.class);
     }
 }
