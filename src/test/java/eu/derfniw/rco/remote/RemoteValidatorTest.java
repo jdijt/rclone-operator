@@ -192,8 +192,9 @@ class RemoteValidatorTest {
     void missingTypeListsAllBackendTypes() {
         var supported =
                 Arrays.stream(BackendType.values()).map(BackendType::value).collect(Collectors.joining(", "));
-        assertThat(validate(new RCloneRemoteSpec())).singleElement().satisfies(e -> assertThat(e.detail())
-                .isEqualTo("supported values: " + supported));
+        assertThat(validate(new RCloneRemoteSpec()))
+                .singleElement()
+                .satisfies(e -> assertThat(e.detail()).isEqualTo("supported values: " + supported));
     }
 
     private List<FieldError> validate(RCloneRemoteSpec spec) {

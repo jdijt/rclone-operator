@@ -250,9 +250,10 @@ class SyncReconcilerApiServerTest {
                     return r;
                 });
 
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(runs(namespace))
-                .extracting(r -> r.getMetadata().getName())
-                .containsExactly(runName(missed.due())));
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(runs(namespace))
+                        .extracting(r -> r.getMetadata().getName())
+                        .containsExactly(runName(missed.due())));
     }
 
     /** Forbid: the due run waits until the unfinished one finishes, then starts. */
@@ -272,9 +273,10 @@ class SyncReconcilerApiServerTest {
 
         finish(manual);
 
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(runs(namespace))
-                .extracting(r -> r.getMetadata().getName())
-                .containsExactlyInAnyOrder("manual", runName(missed.due())));
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(runs(namespace))
+                        .extracting(r -> r.getMetadata().getName())
+                        .containsExactlyInAnyOrder("manual", runName(missed.due())));
     }
 
     /** Replace: the unfinished run is deleted and the due run starts. */
@@ -286,9 +288,10 @@ class SyncReconcilerApiServerTest {
                 missedTwoHourlyRuns(namespace, READY_REMOTE, s -> s.setConcurrencyPolicy(ConcurrencyPolicy.REPLACE));
         resume(missed.sync());
 
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(runs(namespace))
-                .extracting(r -> r.getMetadata().getName())
-                .containsExactly(runName(missed.due())));
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(runs(namespace))
+                        .extracting(r -> r.getMetadata().getName())
+                        .containsExactly(runName(missed.due())));
     }
 
     /** Allow: the due run starts next to the unfinished one. */
@@ -299,9 +302,10 @@ class SyncReconcilerApiServerTest {
         var missed = missedTwoHourlyRuns(namespace, READY_REMOTE, s -> s.setConcurrencyPolicy(ConcurrencyPolicy.ALLOW));
         resume(missed.sync());
 
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(runs(namespace))
-                .extracting(r -> r.getMetadata().getName())
-                .containsExactlyInAnyOrder("manual", runName(missed.due())));
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(runs(namespace))
+                        .extracting(r -> r.getMetadata().getName())
+                        .containsExactlyInAnyOrder("manual", runName(missed.due())));
     }
 
     /**
@@ -428,8 +432,10 @@ class SyncReconcilerApiServerTest {
 
     /** Waits until the Ready condition exists and satisfies {@code done}, and returns it. */
     private Condition awaitReady(CustomResource<?, RCloneSyncStatus> sync, Predicate<Condition> done) {
-        var status = awaitStatus(sync, s -> s.getConditions().stream()
-                .anyMatch(c -> c.getType().equals(RCloneSyncStatus.READY) && done.test(c)));
+        var status = awaitStatus(
+                sync,
+                s -> s.getConditions().stream()
+                        .anyMatch(c -> c.getType().equals(RCloneSyncStatus.READY) && done.test(c)));
         return status.getConditions().stream()
                 .filter(c -> c.getType().equals(RCloneSyncStatus.READY))
                 .findFirst()

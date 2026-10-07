@@ -184,8 +184,9 @@ class RemoteReconcilerApiServerTest {
      */
     static Stream<Arguments> secretRefCases() {
         return Stream.of(Scope.values())
-                .flatMap(scope -> Stream.of(BackendType.values()).flatMap(type -> Stream.of(SecretState.values())
-                        .map(state -> argumentSet(scope + " " + type + " " + state, scope, type, state))));
+                .flatMap(scope -> Stream.of(BackendType.values())
+                        .flatMap(type -> Stream.of(SecretState.values())
+                                .map(state -> argumentSet(scope + " " + type + " " + state, scope, type, state))));
     }
 
     // Every Secret reference of every backend must resolve to an existing Secret and key.
